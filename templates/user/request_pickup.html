@@ -130,6 +130,10 @@
 
 <form method="POST" action="/user/request" enctype="multipart/form-data" class="pickup-form p-6 md:p-8 mb-10">
 
+  <!-- Hidden Inputs for GPS Coordinates -->
+  <input type="hidden" name="latitude" id="latitude">
+  <input type="hidden" name="longitude" id="longitude">
+
   <!-- Map Section -->
   <div class="mb-6">
     <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -322,6 +326,10 @@
 
       if (marker) map.removeLayer(marker);
       marker = L.marker(latlng, {draggable: true}).addTo(map);
+
+      // Update Hidden Form Inputs
+      document.getElementById('latitude').value = latlng.lat;
+      document.getElementById('longitude').value = latlng.lng;
       
       // Fetch Address from Nominatim (Free Geocoding)
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&zoom=18&addressdetails=1`)
@@ -366,6 +374,8 @@
               // Clear fields
               document.querySelector('input[name="area"]').value = "";
               document.querySelector('textarea[name="address"]').value = "";
+              document.getElementById('latitude').value = "";
+              document.getElementById('longitude').value = "";
           }
       });
   }

@@ -4,6 +4,7 @@ from routes.user_routes import user_bp
 
 app = Flask(__name__)
 app.secret_key = "dev_secret"  # Required for session and flash messages
+app.config["MONGO_URI"] = "mongodb://localhost:27017/ewaste_db"
 
 # Initialize the Mock Database
 mongo.init_app(app)
