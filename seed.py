@@ -1,124 +1,58 @@
+# seed.py: Seed MongoDB with demo users for E-Waste project
+from werkzeug.security import generate_password_hash
 from pymongo import MongoClient
-from datetime import datetime
+import os
 
-# ---------------- CONFIG ----------------
-MONGO_URI = "mongodb://localhost:27017/"
-DB_NAME = "ewaste_db"
+# MongoDB connection
+mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/e_waste')
+client = MongoClient(mongo_uri)
+db = client.get_default_database()
+users = db['users']
 
-client = MongoClient(MONGO_URI)
-db = client[DB_NAME]
+# Remove all existing users (optional, for a clean seed)
+users.delete_many({})
 
-# ---------------- CLEAN OLD DATA ----------------
-db.pickup_requests.delete_many({})
-db.collection_clusters.delete_many({})
-
-print("Old data cleared")
-
-# ---------------- SEED USERS ----------------
-users = [
+# Demo users to insert
+seed_users = [
     {
-        "user_name": "Rahul Sharma",
-        "address": "Andheri East, Mumbai",
-        "latitude": 19.1176,
-        "longitude": 72.8631,
-        "ewaste_weight": 60,
-        "product_type": "Desktop PC",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
+        'name': 'Demo User',
+        'email': 'user@example.com',
+        'mobile': '9999999991',
+        'address': 'User Address',
+        'age': 25,
+        'password': generate_password_hash('userpass'),
+        'role': 'user'
     },
     {
-        "user_name": "Amit Verma",
-        "address": "Jogeshwari West, Mumbai",
-        "latitude": 19.1360,
-        "longitude": 72.8486,
-        "ewaste_weight": 30,
-        "product_type": "Laptop",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
+        'name': 'Demo Admin',
+        'email': 'admin@example.com',
+        'mobile': '9999999992',
+        'address': 'Admin Address',
+        'age': 30,
+        'password': generate_password_hash('adminpass'),
+        'role': 'admin'
     },
     {
-        "user_name": "Suresh Patil",
-        "address": "Borivali East, Mumbai",
-        "latitude": 19.2290,
-        "longitude": 72.8567,
-        "ewaste_weight": 25,
-        "product_type": "Printer",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
+        'name': 'Demo Engineer',
+        'email': 'engineer@example.com',
+        'mobile': '9999999993',
+        'address': 'Engineer Address',
+        'age': 28,
+        'password': generate_password_hash('engineerpass'),
+        'role': 'engineer'
     },
     {
-        "user_name": "Neha Joshi",
-        "address": "Thane West",
-        "latitude": 19.2183,
-        "longitude": 72.9781,
-        "ewaste_weight": 40,
-        "product_type": "Office PCs",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
-    },
-    {
-        "user_name": "Karan Mehta",
-        "address": "Kalyan",
-        "latitude": 19.2403,
-        "longitude": 73.1305,
-        "ewaste_weight": 55,
-        "product_type": "Server Racks",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
-    },
-    {
-        "user_name": "Priya Nair",
-        "address": "Navi Mumbai",
-        "latitude": 19.0330,
-        "longitude": 73.0297,
-        "ewaste_weight": 20,
-        "product_type": "Mobile Devices",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
-    },
-    {
-        "user_name": "Vikas Singh",
-        "address": "Panvel",
-        "latitude": 18.9894,
-        "longitude": 73.1175,
-        "ewaste_weight": 35,
-        "product_type": "UPS Batteries",
-        "status": "pending",
-        "cluster_id": None,
-        "created_at": datetime.utcnow()
-    },
-    {
-          "user_name": "ronit teli",
-          "address": "malad",
-          "latitude": 19.2290,
-          "longitude": 72.8567,
-          "ewaste_weight": 35,
-          "product_type": "UPS Batteries",
-          "status": "pending",
-          "cluster_id": None,
-          "created_at": datetime.utcnow()
+        'name': 'Demo Warehouse',
+        'email': 'warehouse@example.com',
+        'mobile': '9999999994',
+        'address': 'Warehouse Address',
+        'age': 35,
+        'password': generate_password_hash('warehousepass'),
+        'role': 'warehouse'
     }
-      
-    
 ]
 
-# ---------------- INSERT DATA ----------------
-db.pickup_requests.insert_many(users)
+# Insert demo users
+users.insert_many(seed_users)
 
-print(f"{len(users)} users inserted successfully")
-
-# ---------------- VERIFY ----------------
-print("\nSeeded Users:")
-for u in db.pickup_requests.find():
-    print(f"- {u['user_name']} | {u['ewaste_weight']} kg | {u['address']}")
-
-print("\n✅ Database seeded successfully. You can now:")
-print("1. Open /warehouse/dashboard")
-print("2. Click 'Analyze Routes'")
-print("3. See READY / ALMOST READY / PENDING clusters")
+print('Database seeded with demo users.')
