@@ -1,6 +1,115 @@
 {% extends 'base.html' %}
 {% block content %}
 
+<style>
+    :root {
+        --color-primary: #005461;   /* Deep Teal */
+        --color-accent: #3BC1A8;    /* Medium Teal */
+        --color-bg: #F0FFDF;        /* Light Lime/Green */
+        --color-white: #ffffff;
+    }
+
+    /* Page Background Override */
+    body {
+        background-color: var(--color-bg) !important;
+        color: var(--color-primary) !important;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* Headings */
+    h1, h2, h3, label {
+        color: var(--color-primary) !important;
+    }
+
+    /* Glassmorphism Form Container */
+    .pickup-form {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(59, 193, 168, 0.2);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 84, 97, 0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .pickup-form:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 40px rgba(0, 84, 97, 0.12);
+    }
+
+    /* Inputs & Textareas */
+    input, textarea, select {
+        border: 2px solid #e2e8f0;
+        border-radius: 10px !important;
+        transition: all 0.3s ease;
+        background-color: #f8fafc;
+    }
+
+    input:focus, textarea:focus {
+        border-color: var(--color-accent) !important;
+        background-color: #fff;
+        box-shadow: 0 0 0 4px rgba(59, 193, 168, 0.15) !important;
+        outline: none;
+    }
+
+    /* Buttons */
+    .btn-submit {
+        background: linear-gradient(135deg, var(--color-primary) 0%, #00798c 100%);
+        color: white;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 12px 24px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0, 84, 97, 0.2);
+    }
+
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0, 84, 97, 0.3);
+        filter: brightness(1.1);
+    }
+
+    .btn-secondary {
+        background-color: var(--color-accent);
+        color: white;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-secondary:hover {
+        background-color: #2ea891;
+        transform: translateY(-1px);
+    }
+
+    /* Request Cards Animation */
+    .request-card {
+        background: white;
+        border-radius: 12px;
+        border-left: 5px solid var(--color-accent);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        opacity: 0;
+        animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        margin-bottom: 1rem;
+    }
+
+    .request-card:hover {
+        transform: scale(1.02);
+        box-shadow: 0 12px 24px rgba(0, 84, 97, 0.1);
+        z-index: 10;
+    }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Stagger Animations */
+    .request-card:nth-child(1) { animation-delay: 0.1s; }
+    .request-card:nth-child(2) { animation-delay: 0.2s; }
+    .request-card:nth-child(3) { animation-delay: 0.3s; }
+    .request-card:nth-child(n+4) { animation-delay: 0.4s; }
+</style>
+
 <!-- Leaflet CSS & JS (Free OpenStreetMap Support) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -10,16 +119,16 @@
   {% if messages %}
     {% for category, message in messages %}
       <div class="mb-4 p-4 rounded 
-           {{ 'bg-green-100 text-green-700' if category == 'success' else 'bg-red-100 text-red-700' }}">
+           {{ 'bg-green-100 text-green-800 border border-green-200' if category == 'success' else 'bg-red-100 text-red-800 border border-red-200' }} shadow-sm">
         {{ message }}
       </div>
     {% endfor %}
   {% endif %}
 {% endwith %}
 
-<h1 class="text-2xl font-bold mb-4">Request E-Waste Pickup</h1>
+<h1 class="text-3xl font-bold mb-6 tracking-tight">Request E-Waste Pickup</h1>
 
-<form method="POST" action="/user/request" enctype="multipart/form-data" class="bg-white p-4 md:p-6 rounded shadow-md mb-8 pickup-form">
+<form method="POST" action="/user/request" enctype="multipart/form-data" class="pickup-form p-6 md:p-8 mb-10">
 
   <!-- Map Section -->
   <div class="mb-6">
@@ -27,7 +136,7 @@
       Select Pickup Location (South Mumbai)
     </label>
     <div id="map" class="h-64 w-full rounded border border-gray-300 z-0"></div>
-    <button type="button" onclick="detectLocation()" class="mt-2 text-sm text-blue-600 hover:text-blue-800 font-semibold flex items-center">
+    <button type="button" onclick="detectLocation()" class="mt-3 text-sm text-[#005461] hover:text-[#3BC1A8] font-bold flex items-center transition-colors">
       📍 Detect My Current Location
     </button>
   </div>
@@ -36,35 +145,35 @@
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
     <input name="area" required
       placeholder="Area / Region"
-      class="border p-2 rounded w-full">
+      class="p-3 w-full">
     <textarea name="address" required
       placeholder="Pickup Address"
-      class="border p-2 rounded w-full"></textarea>
+      class="p-3 w-full"></textarea>
   </div>
 
   <!-- Dynamic Items Container -->
   <div id="items-container" class="space-y-4 mb-6">
     <!-- Item Row Template (First Item) -->
-    <div class="item-row border p-4 rounded bg-gray-50 relative">
+    <div class="item-row border border-gray-200 p-4 rounded-xl bg-white relative shadow-sm">
       <h3 class="font-bold mb-2 text-gray-700">Item 1</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input name="ewaste_type[]" required placeholder="Type (e.g. Laptop)" class="border p-2 rounded w-full">
-        <input name="weight[]" type="number" required placeholder="Weight (kg)" class="border p-2 rounded w-full weight-input" oninput="calculateTotal()">
-        <input type="file" name="images[]" accept="image/*" multiple class="border p-2 rounded w-full bg-white">
-        <input name="item_description[]" placeholder="Specific details (e.g. Broken screen)" class="border p-2 rounded w-full">
+        <input name="ewaste_type[]" required placeholder="Type (e.g. Laptop)" class="p-3 w-full">
+        <input name="weight[]" type="number" required placeholder="Weight (kg)" class="p-3 w-full weight-input" oninput="calculateTotal()">
+        <input type="file" name="images[]" accept="image/*" multiple class="p-3 w-full bg-gray-50">
+        <input name="item_description[]" placeholder="Specific details (e.g. Broken screen)" class="p-3 w-full">
       </div>
     </div>
   </div>
 
   <!-- Controls & Totals -->
   <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-    <button type="button" onclick="addItem()" class="bg-blue-100 text-blue-700 px-4 py-2 rounded hover:bg-blue-200 font-semibold transition w-full md:w-auto">
+    <button type="button" onclick="addItem()" class="btn-secondary px-6 py-2 font-semibold w-full md:w-auto shadow-sm">
       + Add Another Item
     </button>
     
     <div class="text-xl">
       <span class="text-gray-700 font-bold">Total Weight:</span>
-      <span id="display-total" class="text-2xl font-bold text-green-600">0</span> kg
+      <span id="display-total" class="text-2xl font-bold text-[#3BC1A8]">0</span> kg
     </div>
   </div>
 
@@ -72,40 +181,51 @@
   <div class="mb-6">
     <textarea name="description"
       placeholder="General notes about the pickup..."
-      class="border p-2 rounded w-full"></textarea>
+      class="p-3 w-full"></textarea>
   </div>
 
-  <button class="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition">
+  <button class="btn-submit w-full md:w-auto">
     Submit Request
   </button>
 </form>
 
-<h2 class="text-xl font-semibold mb-2">My Requests</h2>
+<h2 class="text-2xl font-bold mb-4 mt-8">My Requests</h2>
 
 {% for r in requests %}
-<div class="bg-gray-100 p-4 mb-2 rounded border-l-4 
+<div class="request-card p-5 
     {% if r.status == 'collected' %}border-green-500
     {% elif r.status == 'rejected' %}border-red-500
     {% elif r.status == 'accepted' %}border-blue-500
-    {% else %}border-yellow-500{% endif %}">
+    {% else %}border-[#3BC1A8]{% endif %}">
     
-  <p><b>Type:</b> {{ r.ewaste_type }}</p>
-  <p><b>Weight:</b> {{ r.approx_weight }} kg</p>
-  <p><b>Status:</b>
-    <span class="font-semibold uppercase text-sm
+  <div class="flex justify-between items-start">
+    <div>
+        <p class="text-lg font-bold text-[#005461]">{{ r.ewaste_type }}</p>
+        <p class="text-sm text-gray-500 mt-1">{{ r.created_at.strftime('%Y-%m-%d') }} • {{ r.area }}</p>
+    </div>
+    <div class="text-right">
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide
         {% if r.status == 'collected' %}text-green-600
         {% elif r.status == 'rejected' %}text-red-600
         {% elif r.status == 'accepted' %}text-blue-600
-        {% else %}text-yellow-600{% endif %}">
-      {{ r.status }}
-    </span>
-  </p>
+        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+          {{ r.status }}
+        </span>
+        <p class="mt-2 font-semibold text-gray-600">{{ r.approx_weight }} kg</p>
+    </div>
+  </div>
+
   {% if r.engineer_price %}
-    <p><b>Estimated Price:</b> ₹{{ r.engineer_price }}</p>
+    <div class="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
+        <span class="text-sm text-gray-500">Estimated Value</span>
+        <span class="text-xl font-bold text-[#3BC1A8]">₹{{ r.engineer_price }}</span>
+    </div>
   {% endif %}
 </div>
 {% else %}
-<p class="text-gray-500">No requests found.</p>
+<div class="text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-300 opacity-75">
+    <p class="text-gray-500 text-lg">No requests found yet.</p>
+</div>
 {% endfor %}
 
 <!-- Map Logic Script -->
@@ -312,17 +432,17 @@
       const count = container.children.length + 1;
       
       const div = document.createElement('div');
-      div.className = 'item-row border p-4 rounded bg-gray-50 relative';
+      div.className = 'item-row border border-gray-200 p-4 rounded-xl bg-white relative shadow-sm';
       div.innerHTML = `
           <div class="flex justify-between items-center mb-2">
             <h3 class="font-bold text-gray-700">Item ${count}</h3>
             <button type="button" onclick="this.closest('.item-row').remove(); calculateTotal();" class="text-red-500 text-sm hover:underline">Remove</button>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input name="ewaste_type[]" required placeholder="Type (e.g. Laptop)" class="border p-2 rounded w-full">
-            <input name="weight[]" type="number" required placeholder="Weight (kg)" class="border p-2 rounded w-full weight-input" oninput="calculateTotal()">
-            <input type="file" name="images[]" accept="image/*" multiple class="border p-2 rounded w-full bg-white">
-            <input name="item_description[]" placeholder="Specific details" class="border p-2 rounded w-full">
+            <input name="ewaste_type[]" required placeholder="Type (e.g. Laptop)" class="p-3 w-full border-2 border-gray-200 rounded-lg">
+            <input name="weight[]" type="number" required placeholder="Weight (kg)" class="p-3 w-full weight-input border-2 border-gray-200 rounded-lg" oninput="calculateTotal()">
+            <input type="file" name="images[]" accept="image/*" multiple class="p-3 w-full bg-gray-50 border-2 border-gray-200 rounded-lg">
+            <input name="item_description[]" placeholder="Specific details" class="p-3 w-full border-2 border-gray-200 rounded-lg">
           </div>
       `;
       container.appendChild(div);
