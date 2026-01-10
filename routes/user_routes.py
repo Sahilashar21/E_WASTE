@@ -48,6 +48,20 @@ def create_request():
         details = "; ".join([f"{t} ({w}kg): {d}" for t, w, d in zip(types, weights, item_descs) if t])
         final_description = f"{general_desc}\n[Details]: {details}" if details else general_desc
 
+        # Create structured items list for database
+        items = []
+        for t, w, d in zip(types, weights, item_descs):
+            if t.strip():
+                items.append({
+                    'type': t.strip(),
+                    'weight': int(w) if w and w.strip() else 0,
+                    'description': d.strip()
+                })
+
+        # Get coordinates safely
+        lat = request.form.get('latitude')
+        lng = request.form.get('longitude')
+
         data = {
             'user_id': session['user_id'],
             'area': request.form.get('area'),
@@ -55,6 +69,9 @@ def create_request():
             'ewaste_type': final_ewaste_type,
             'description': final_description,
             'approx_weight': total_weight,
+            'items': items,
+            'latitude': float(lat) if lat else None,
+            'longitude': float(lng) if lng else None,
             'images': [],   # future: file upload
             'status': 'pending',
             'engineer_price': None,
