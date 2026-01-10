@@ -1,0 +1,331 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- Leaflet CSS & JS (Free OpenStreetMap Support) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Flash Messages Area -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="mb-4 p-4 rounded 
+           {{ 'bg-green-100 text-green-700' if category == 'success' else 'bg-red-100 text-red-700' }}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<h1 class="text-2xl font-bold mb-4">Request E-Waste Pickup</h1>
+
+<form method="POST" action="/user/request" enctype="multipart/form-data" class="bg-white p-4 md:p-6 rounded shadow-md mb-8 pickup-form">
+
+  <!-- Map Section -->
+  <div class="mb-6">
+    <label class="block text-sm font-bold text-gray-700 mb-2">
+      Select Pickup Location (South Mumbai)
+    </label>
+    <div id="map" class="h-64 w-full rounded border border-gray-300 z-0"></div>
+    <button type="button" onclick="detectLocation()" class="mt-2 text-sm text-blue-600 hover:text-blue-800 font-semibold flex items-center">
+      📍 Detect My Current Location
+    </button>
+  </div>
+
+  <!-- Global Address Fields -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <input name="area" required
+      placeholder="Area / Region"
+      class="border p-2 rounded w-full">
+    <textarea name="address" required
+      placeholder="Pickup Address"
+      class="border p-2 rounded w-full"></textarea>
+  </div>
+
+  <!-- Dynamic Items Container -->
+  <div id="items-container" class="space-y-4 mb-6">
+    <!-- Item Row Template (First Item) -->
+    <div class="item-row border p-4 rounded bg-gray-50 relative">
+      <h3 class="font-bold mb-2 text-gray-700">Item 1</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input name="ewaste_type[]" required placeholder="Type (e.g. Laptop)" class="border p-2 rounded w-full">
+        <input name="weight[]" type="number" required placeholder="Weight (kg)" class="border p-2 rounded w-full weight-input" oninput="calculateTotal()">
+        <input type="file" name="images[]" accept="image/*" multiple class="border p-2 rounded w-full bg-white">
+        <input name="item_description[]" placeholder="Specific details (e.g. Broken screen)" class="border p-2 rounded w-full">
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls & Totals -->
+  <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+    <button type="button" onclick="addItem()" class="bg-blue-100 text-blue-700 px-4 py-2 rounded hover:bg-blue-200 font-semibold transition w-full md:w-auto">
+      + Add Another Item
+    </button>
+    
+    <div class="text-xl">
+      <span class="text-gray-700 font-bold">Total Weight:</span>
+      <span id="display-total" class="text-2xl font-bold text-green-600">0</span> kg
+    </div>
+  </div>
+
+  <!-- General Description -->
+  <div class="mb-6">
+    <textarea name="description"
+      placeholder="General notes about the pickup..."
+      class="border p-2 rounded w-full"></textarea>
+  </div>
+
+  <button class="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition">
+    Submit Request
+  </button>
+</form>
+
+<h2 class="text-xl font-semibold mb-2">My Requests</h2>
+
+{% for r in requests %}
+<div class="bg-gray-100 p-4 mb-2 rounded border-l-4 
+    {% if r.status == 'collected' %}border-green-500
+    {% elif r.status == 'rejected' %}border-red-500
+    {% elif r.status == 'accepted' %}border-blue-500
+    {% else %}border-yellow-500{% endif %}">
+    
+  <p><b>Type:</b> {{ r.ewaste_type }}</p>
+  <p><b>Weight:</b> {{ r.approx_weight }} kg</p>
+  <p><b>Status:</b>
+    <span class="font-semibold uppercase text-sm
+        {% if r.status == 'collected' %}text-green-600
+        {% elif r.status == 'rejected' %}text-red-600
+        {% elif r.status == 'accepted' %}text-blue-600
+        {% else %}text-yellow-600{% endif %}">
+      {{ r.status }}
+    </span>
+  </p>
+  {% if r.engineer_price %}
+    <p><b>Estimated Price:</b> ₹{{ r.engineer_price }}</p>
+  {% endif %}
+</div>
+{% else %}
+<p class="text-gray-500">No requests found.</p>
+{% endfor %}
+
+<!-- Map Logic Script -->
+<script>
+  // 1. Define Mumbai Land Polygon (Expanded to include all suburbs and exclude water)
+  var mumbaiPolygon = [
+    [18.850, 72.815], // Colaba Tip (Extended South)
+    [18.920, 72.780], // Marine Drive / Malabar Hill
+    [19.020, 72.800], // Bandra Land's End
+    [19.100, 72.815], // Juhu
+    [19.120, 72.760], // Madh Island (South)
+    [19.180, 72.760], // Madh/Marve (West)
+    [19.295, 72.775], // Uttan / Dongri (North West Tip)
+    [19.318, 72.840], // Bhayandar West (Vasai Creek Edge)
+    [19.315, 72.865], // Bhayandar East (Vasai Creek Edge)
+    [19.298, 72.890], // Versova Bridge / Fountain
+    [19.292, 72.920], // Chenna Creek / Ghodbunder
+    [19.288, 72.965], // Gaimukh / Bhayandarpada (Water Bed Reference)
+    [19.275, 72.975], // Ovala / Kasarvadavali
+    [19.245, 72.995], // Kolshet Road End (Left of Water)
+    [19.220, 73.000], // Balkum / Saket
+    [19.195, 72.995], // Thane / Kalwa Bridge
+    [19.140, 72.990], // Airoli Bridge (West End)
+    [19.030, 72.950], // Mankhurd (Vashi Bridge West)
+    [19.000, 72.900], // Trombay / Mahul
+    [18.930, 72.850], // Sewri / Eastern Docks
+    [18.850, 72.815]  // Close Loop
+  ];
+
+  // 2. Initialize Map
+  var map = L.map('map', {
+      minZoom: 11
+  }).setView([19.076, 72.877], 11); // Center on Mumbai
+
+  // 3. Add OpenStreetMap Tile Layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  // 4. Create "Black and White" Mask (World minus Mumbai)
+  var worldCoords = [
+    [90, -180],
+    [90, 180],
+    [-90, 180],
+    [-90, -180]
+  ];
+
+  // Add a dark overlay to everything OUTSIDE Mumbai
+  var maskLayer = L.polygon([worldCoords, mumbaiPolygon], {
+    color: 'transparent', 
+    fillColor: '#000000', // Black overlay
+    fillOpacity: 0.6,     // Slightly reduced opacity so context is visible but dimmed
+    interactive: true     // Capture clicks outside
+  }).addTo(map);
+
+  // Alert when clicking outside
+  maskLayer.on('click', function() {
+    alert("Service is only available within Mumbai limits (Land only).");
+  });
+
+  // 5. Marker Logic
+  var marker;
+
+  async function placeMarker(latlng) {
+      // Snap to nearest road using OSRM (Open Source Routing Machine)
+      try {
+          // OSRM API expects {lon},{lat}
+          // Use 'driving' profile for vehicle roads only. radiuses=100 limits search to 100m.
+          const osrmUrl = `https://router.project-osrm.org/nearest/v1/driving/${latlng.lng},${latlng.lat}?number=1&radiuses=100`;
+          const response = await fetch(osrmUrl);
+          const data = await response.json();
+          if (data.code === 'Ok' && data.waypoints && data.waypoints.length > 0) {
+              const waypoint = data.waypoints[0];
+              
+              // STRICT CHECK: Distance from click to road (in meters)
+              // If > 25m, user likely clicked a park, water, or pedestrian area
+              if (waypoint.distance > 25) {
+                  alert("Selected location is too far from a vehicle road. Please click closer to a road.");
+                  return;
+              }
+
+              const [snappedLon, snappedLat] = waypoint.location;
+              latlng = L.latLng(snappedLat, snappedLon);
+          } else {
+              alert("No vehicle road found nearby. Please select a location on a road accessible by vehicle.");
+              return;
+          }
+      } catch (e) {
+          console.warn("Road snapping failed.");
+          alert("Unable to verify road access. Please try again.");
+          return;
+      }
+
+      if (marker) map.removeLayer(marker);
+      marker = L.marker(latlng, {draggable: true}).addTo(map);
+      
+      // Fetch Address from Nominatim (Free Geocoding)
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&zoom=18&addressdetails=1`)
+          .then(response => response.json())
+          .then(data => {
+              if(data) {
+                  // REJECT GREEN ZONES & PEDESTRIAN PATHS
+                  const invalidHighwayTypes = ['footway', 'path', 'pedestrian', 'steps', 'cycleway'];
+                  if (data.class === 'leisure' || data.class === 'natural' || data.type === 'park' || data.type === 'garden' || 
+                     (data.class === 'highway' && invalidHighwayTypes.includes(data.type))) {
+                       alert("Selected location appears to be a pedestrian path or green zone. Please select a vehicle-accessible road.");
+                       map.removeLayer(marker);
+                       marker = null;
+                       return;
+                  }
+
+                  if (data.address) {
+                      // Auto-fill form fields
+                      const addr = data.address;
+                      
+                      // Priority: Suburb (e.g. Andheri) > City District (e.g. Mumbai City) > City
+                      // We avoid 'road' or 'neighbourhood' to ensure the region is large enough for engineer logistics.
+                      const area = addr.suburb || addr.city_district || addr.town || "Mumbai";
+                      const fullAddress = data.display_name;
+
+                      document.querySelector('input[name="area"]').value = area;
+                      document.querySelector('textarea[name="address"]').value = fullAddress;
+                  }
+              }
+          })
+          .catch(err => console.error("Geocoding error:", err));
+      
+      // Handle drag end - check if dropped outside
+      marker.on('dragend', function(event){
+          var newPos = event.target.getLatLng();
+          if (isPointInPolygon([newPos.lat, newPos.lng], mumbaiPolygon)) {
+              placeMarker(newPos);
+          } else {
+              alert("Marker dropped outside service area.");
+              map.removeLayer(marker);
+              marker = null;
+              // Clear fields
+              document.querySelector('input[name="area"]').value = "";
+              document.querySelector('textarea[name="address"]').value = "";
+          }
+      });
+  }
+
+  // Only allow clicks inside the hole (which fall through to map)
+  map.on('click', function(e) {
+      // Double check point in polygon just in case
+      if (isPointInPolygon([e.latlng.lat, e.latlng.lng], mumbaiPolygon)) {
+          placeMarker(e.latlng);
+      } else {
+          // This usually won't fire because maskLayer catches it, but good for safety
+          alert("Service is only available within Mumbai limits.");
+      }
+  });
+
+  // 6. GPS Detection
+  function detectLocation() {
+      if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function(position) {
+              const lat = position.coords.latitude;
+              const lng = position.coords.longitude;
+              
+              if (isPointInPolygon([lat, lng], mumbaiPolygon)) {
+                  map.setView([lat, lng], 15);
+                  placeMarker({lat: lat, lng: lng});
+              } else {
+                  alert("Your current location is outside the Mumbai service area.");
+              }
+          }, function() {
+              alert("Could not get your location. Please allow location access.");
+          });
+      }
+  }
+
+  // 7. Ray-Casting Algorithm for Point-in-Polygon
+  function isPointInPolygon(point, vs) {
+      var x = point[0], y = point[1];
+      var inside = false;
+      for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+          var xi = vs[i][0], yi = vs[i][1];
+          var xj = vs[j][0], yj = vs[j][1];
+          
+          var intersect = ((yi > y) != (yj > y))
+              && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+          if (intersect) inside = !inside;
+      }
+      return inside;
+  };
+
+  // 8. Dynamic Form Logic
+  function calculateTotal() {
+      let total = 0;
+      document.querySelectorAll('.weight-input').forEach(input => {
+          const val = parseFloat(input.value);
+          if (!isNaN(val) && val > 0) {
+              total += val;
+          }
+      });
+      document.getElementById('display-total').innerText = total;
+  }
+
+  function addItem() {
+      const container = document.getElementById('items-container');
+      const count = container.children.length + 1;
+      
+      const div = document.createElement('div');
+      div.className = 'item-row border p-4 rounded bg-gray-50 relative';
+      div.innerHTML = `
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="font-bold text-gray-700">Item ${count}</h3>
+            <button type="button" onclick="this.closest('.item-row').remove(); calculateTotal();" class="text-red-500 text-sm hover:underline">Remove</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input name="ewaste_type[]" required placeholder="Type (e.g. Laptop)" class="border p-2 rounded w-full">
+            <input name="weight[]" type="number" required placeholder="Weight (kg)" class="border p-2 rounded w-full weight-input" oninput="calculateTotal()">
+            <input type="file" name="images[]" accept="image/*" multiple class="border p-2 rounded w-full bg-white">
+            <input name="item_description[]" placeholder="Specific details" class="border p-2 rounded w-full">
+          </div>
+      `;
+      container.appendChild(div);
+  }
+</script>
+{% endblock %}
