@@ -13,7 +13,7 @@ except Exception:
 				self.db = None
 
 			def init_app(self, app):
-				mongo_uri = app.config.get('MONGO_URI', 'mongodb://localhost:27017/ewaste_db')
+				mongo_uri = app.config.get('MONGO_URI', 'mongodb+srv://darpanmeher1346_db_user:E8kreTF6Z8G5mFbn@cluster0.mhkyevr.mongodb.net/?retryWrites=true&w=majority')
 				self.client = pymongo.MongoClient(mongo_uri)
 				self.db = self.client.get_default_database()
 

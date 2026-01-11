@@ -44,7 +44,7 @@ def create_app():
     app = Flask(__name__)
 
     # Configuration
-    app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb://localhost:27017/ewaste_db")
+    app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb+srv://darpanmeher1346_db_user:E8kreTF6Z8G5mFbn@cluster0.mhkyevr.mongodb.net/?retryWrites=true&w=majority")
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev_secret")
 
     # Initialize MongoDB

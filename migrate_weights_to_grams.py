@@ -8,7 +8,7 @@ from pymongo import MongoClient
 import os
 import argparse
 
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ewaste_db')
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://darpanmeher1346_db_user:E8kreTF6Z8G5mFbn@cluster0.mhkyevr.mongodb.net/?retryWrites=true&w=majority')
 client = MongoClient(MONGO_URI)
 db = client['ewaste_db']
 pickups = db.pickup_requests
