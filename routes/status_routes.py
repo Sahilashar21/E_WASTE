@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from flask import current_app as app
+from mongo import mongo
 
 status_bp = Blueprint('status', __name__)
 
@@ -7,7 +7,7 @@ status_bp = Blueprint('status', __name__)
 def db_status():
     try:
         # Try to get server info to check connection
-        app.mongo.cx.server_info()
+        mongo.cx.server_info()
         return jsonify({'status': 'connected'})
     except Exception as e:
         return jsonify({'status': 'disconnected', 'error': str(e)}), 500

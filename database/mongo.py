@@ -9,7 +9,7 @@ load_dotenv()
 mongo = PyMongo()
 
 def get_db():
-    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/e_waste')
+    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ewaste_db')
     client = MongoClient(mongo_uri)
-    db = client.get_default_database()
+    db = client['ewaste_db']
     return db

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Engineer Inspection</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-6">
+
+<h2 class="text-2xl font-bold mb-4">Inspection</h2>
+
+<!-- ITEMS CONTAINER -->
+<div id="items" class="space-y-4"></div>
+
+<!-- ADD PRODUCT -->
+<button onclick="addItem()"
+  class="bg-gray-800 text-white px-4 py-2 rounded mt-4">
+  ➕ Add Product
+</button>
+
+<!-- TOTAL -->
+<div class="mt-6 text-xl font-bold">
+  Estimated Total: ₹<span id="totalPrice">0</span>
+</div>
+
+<!-- ACTIONS -->
+<div class="flex gap-4 mt-6">
+  <button onclick="submitDecision('approved')"
+    class="bg-green-600 text-white px-6 py-2 rounded">
+    ✅ Approve
+  </button>
+
+  <button onclick="submitDecision('admin')"
+    class="bg-yellow-500 text-white px-6 py-2 rounded">
+    🟡 Send to Admin
+  </button>
+
+  <button onclick="submitDecision('rejected')"
+    class="bg-red-600 text-white px-6 py-2 rounded">
+    ❌ Reject
+  </button>
+</div>
+
+<script>
+const PICKUP_ID = "{{ pickup_id }}";
+let items = [];
+
+/* ADD PRODUCT CARD */
+function addItem() {
+  const id = Date.now();
+  items.push({ id, price: 0 });
+
+  document.getElementById("items").insertAdjacentHTML("beforeend", `
+    <div class="bg-white p-4 rounded shadow" data-id="${id}">
+      <div class="grid grid-cols-5 gap-2">
+
+        <select class="border p-2" onchange="recalculate(${id})">
+          <option value="laptop">Laptop</option>
+          <option value="phone">Phone</option>
+          <option value="tv">TV</option>
+          <option value="wires">Wires</option>
+        </select>
+
+        <input type="number" placeholder="Weight (grams)"
+          class="border p-2" oninput="recalculate(${id})">
+
+        <input type="number" placeholder="Age (years)"
+          class="border p-2" oninput="recalculate(${id})">
+
+        <select class="border p-2" onchange="recalculate(${id})">
+          <option value="excellent">Excellent</option>
+          <option value="good">Good</option>
+          <option value="fair">Fair</option>
+          <option value="poor">Poor</option>
+        </select>
+
+        <div class="font-semibold flex items-center">
+          ₹<span class="price">0</span>
+        </div>
+
+      </div>
+    </div>
+  `);
+}
+
+/* REAL-TIME PRICE CALCULATION */
+function recalculate(id) {
+  const row = document.querySelector(`[data-id="${id}"]`);
+  const selects = row.querySelectorAll("select");
+  const inputs = row.querySelectorAll("input");
+
+  const payload = {
+    category: selects[0].value,
+    weight: inputs[0].value || 0,
+    age_years: inputs[1].value || 0,
+    condition: selects[1].value
+  };
+
+  fetch("/engineer/calculate-price", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.json())
+  .then(data => {
+    row.querySelector(".price").innerText = data.suggested_price;
+    updateTotal();
+  });
+}
+
+/* TOTAL PRICE */
+function updateTotal() {
+  let total = 0;
+  document.querySelectorAll(".price").forEach(p => {
+    total += parseFloat(p.innerText) || 0;
+  });
+  document.getElementById("totalPrice").innerText = total.toFixed(2);
+}
+
+/* FINAL SUBMISSION */
+function submitDecision(decision) {
+  fetch(`/engineer/submit/${PICKUP_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      decision,
+      total_price: document.getElementById("totalPrice").innerText,
+      items
+    })
+  }).then(() => window.location.href = "/engineer/dashboard");
+}
+</script>
+
+</body>
+</html>

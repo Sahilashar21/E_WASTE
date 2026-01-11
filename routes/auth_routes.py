@@ -1,63 +1,10 @@
-
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app, abort
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import Blueprint, render_template, request, redirect, session, flash, url_for
+from mongo import mongo
 from functools import wraps
-from pymongo import MongoClient
-import os
+from werkzeug.security import check_password_hash
 
-# Blueprint setup
 auth_bp = Blueprint('auth', __name__)
 
-# Registration route
-@auth_bp.route('/register', methods=['GET', 'POST'])
-def register():
-    error = None
-    success = None
-    if request.method == 'POST':
-        name = request.form.get('name')
-        email = request.form.get('email')
-        mobile = request.form.get('mobile')
-        address = request.form.get('address')
-        age = request.form.get('age')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        users = get_users_collection()
-        # Validation
-        if not all([name, email, mobile, address, age, password, confirm_password]):
-            error = 'All fields are required.'
-        elif users.find_one({'email': email}):
-            error = 'Email already registered.'
-        elif users.find_one({'mobile': mobile}):
-            error = 'Mobile number already registered.'
-        elif password != confirm_password:
-            error = 'Passwords do not match.'
-        elif not mobile.isdigit() or len(mobile) != 10:
-            error = 'Mobile number must be 10 digits.'
-        elif not age.isdigit() or not (1 <= int(age) <= 120):
-            error = 'Enter a valid age.'
-        else:
-            hashed_pw = generate_password_hash(password)
-            users.insert_one({
-                'name': name,
-                'email': email,
-                'mobile': mobile,
-                'address': address,
-                'age': int(age),
-                'password': hashed_pw,
-                'role': 'user'
-            })
-            success = 'Account created! You can now log in.'
-            return render_template('register.html', success=success)
-    return render_template('register.html', error=error)
-
-# MongoDB connection helper
-def get_users_collection():
-    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/e_waste')
-    client = MongoClient(mongo_uri)
-    db = client.get_default_database()
-    return db['users']
-
-# Decorators
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -66,55 +13,104 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def role_required(role):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] != role:
-                flash('Unauthorized access.', 'error')
-                return abort(403)
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
-
-# Login route
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    error = None
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        users = get_users_collection()
-        user = users.find_one({'email': email})
-        if user and check_password_hash(user['password'], password):
-            session['user_id'] = str(user['_id'])
-            session['role'] = user['role']
-            return redirect(url_for('auth.role_redirect'))
+    if request.method == 'GET':
+        if 'user_id' in session:
+            return redirect('/')
+        return render_template('login.html')
+    
+    email = request.form.get('email')
+    password = request.form.get('password')
+    
+    user = mongo.db.users.find_one({'email': email})
+    
+    # Check password using werkzeug (handles both hashed and plain text)
+    if user:
+        stored_password = user.get('password', '')
+        # Try hashed password first (werkzeug format)
+        if stored_password.startswith('pbkdf2:') or stored_password.startswith('scrypt:'):
+            password_valid = check_password_hash(stored_password, password)
         else:
-            error = 'Invalid email or password.'
-    return render_template('login.html', error=error)
+            # Fallback to plain text comparison for backwards compatibility
+            password_valid = stored_password == password
+        
+        if password_valid:
+            session['user_id'] = str(user['_id'])
+            session['email'] = user['email']
+            session['role'] = user['role']
+            session['name'] = user.get('name', '')
 
-# Role-based redirect
-@auth_bp.route('/redirect')
-def role_redirect():
-    role = session.get('role')
-    if role == 'user':
-        return redirect('/user/request')
-    elif role == 'engineer':
-        return redirect('/engineer/dashboard')
-    elif role == 'warehouse':
-        return redirect('/warehouse/dashboard')
-    else:
-        return redirect(url_for('auth.login'))
+            # Redirect based on role
+            if user['role'] == 'warehouse':
+                return redirect(url_for('warehouse.dashboard'))
+            elif user['role'] == 'engineer':
+                return redirect(url_for('engineer.dashboard'))
+            elif user['role'] == 'recycler':
+                return redirect(url_for('recycler.dashboard'))
+            elif user['role'] == 'user':
+                return redirect(url_for('user.dashboard'))
+            elif user['role'] == 'driver':
+                return redirect(url_for('driver.dashboard'))
+            else:
+                return redirect('/')
 
-# Logout route
-@auth_bp.route('/logout')
-@login_required
-def logout():
-    session.clear()
+    # Development fallback: if DB not seeded, allow demo credentials
+    DEMO_USERS = {
+        'user@example.com': ('user', 'userpass', 'Demo User'),
+        'warehouse@example.com': ('warehouse', 'warehousepass', 'Main Warehouse Admin'),
+        'engineer@example.com': ('engineer', 'password123', 'Demo Engineer'),
+        'engineer1@example.com': ('engineer', 'engineerpass', 'Ramesh Engineer'),
+        'recycler@example.com': ('recycler', 'password123', 'Demo Recycler'),
+        'driver@example.com': ('driver', 'password123', 'Demo Driver')
+    }
+
+    demo = DEMO_USERS.get(email)
+    if demo and demo[1] == password:
+        session['user_id'] = email
+        session['email'] = email
+        session['role'] = demo[0]
+        session['name'] = demo[2]
+
+        if demo[0] == 'warehouse':
+            return redirect(url_for('warehouse.dashboard'))
+        elif demo[0] == 'engineer':
+            return redirect(url_for('engineer.dashboard'))
+        elif demo[0] == 'recycler':
+            return redirect(url_for('recycler.dashboard'))
+        elif demo[0] == 'driver':
+            return redirect(url_for('driver.dashboard'))
+        else:
+            return redirect(url_for('user.dashboard'))
+
+    flash('Invalid email or password', 'error')
     return redirect(url_for('auth.login'))
 
-# Error handler for 403
-@auth_bp.app_errorhandler(403)
-def forbidden(e):
-    return render_template('403.html'), 403
+@auth_bp.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/')
+
+@auth_bp.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'GET':
+        return render_template('register.html')
+    
+    name = request.form.get('name')
+    email = request.form.get('email')
+    password = request.form.get('password')
+    role = 'user' # Default role for self-registration
+
+    if mongo.db.users.find_one({'email': email}):
+        flash('Email already registered', 'error')
+        return redirect(url_for('auth.register'))
+
+    from werkzeug.security import generate_password_hash
+    mongo.db.users.insert_one({
+        'name': name,
+        'email': email,
+        'password': generate_password_hash(password),
+        'role': role
+    })
+    flash('Registration successful! Please login.', 'success')
+    return redirect(url_for('auth.login'))

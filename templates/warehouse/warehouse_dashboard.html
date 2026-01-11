@@ -1,76 +1,354 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Warehouse Admin – Route Planner</h1>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<form method="POST" action="/warehouse/analyze-routes" class="mb-6">
-  <button class="bg-blue-600 text-white px-4 py-2 rounded">
-    Analyze Routes
-  </button>
-</form>
+<div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 fade-in-up">
+    <h1 class="text-4xl font-bold text-[#005461]">Warehouse Analytics & Logistics</h1>
+    <div class="flex gap-3">
+      <a href="{{ url_for('warehouse.advanced_analytics') }}" class="glass bg-white/60 text-[#005461] border border-[#005461]/20 px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md hover:bg-white transition-all flex items-center gap-2">
+          <span>📊</span> Advanced Analytics
+      </a>
+      <form method="POST" action="/warehouse/analyze-routes" style="display: inline;">
+          <button class="bg-gradient-to-r from-[#005461] to-[#00798c] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2">
+              <span>⚙️</span> Run AI Route Optimization
+          </button>
+      </form>
+    </div>
+</div>
+
+<!-- Warehouse Network Status -->
+<div class="mb-8 fade-in-up" style="animation-delay: 100ms;">
+    <h2 class="text-xl font-bold text-[#005461] mb-4">🏭 Warehouse Network</h2>
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {% for wh in warehouses %}
+        <div onclick="viewHubInventory('{{ wh.name }}')" class="glass p-4 rounded-xl shadow-sm border hover:-translate-y-1 transition-transform cursor-pointer {% if loop.index == 5 %}border-purple-400 bg-purple-50/50{% else %}border-white/50{% endif %}">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-sm text-[#005461]">{{ wh.name }}</h3>
+                    <p class="text-xs text-gray-500 mt-1">Lat: {{ wh.lat }}, Lng: {{ wh.lng }}</p>
+                </div>
+                {% if loop.index == 5 %}
+                <span class="text-[10px] font-bold bg-purple-200 text-purple-800 px-2 py-1 rounded-full">HUB</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8 fade-in-up" style="animation-delay: 200ms;">
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-all group">
+        <p class="text-gray-500 text-sm font-semibold uppercase">Total Weight</p>
+        <p class="text-3xl font-bold text-[#005461] group-hover:scale-105 transition-transform">{{ stats.total_weight }} <span class="text-lg text-gray-400">g</span></p>
+    </div>
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-all group">
+        <p class="text-gray-500 text-sm font-semibold uppercase">Pending Requests</p>
+        <p class="text-3xl font-bold text-yellow-600 group-hover:scale-105 transition-transform">{{ stats.pending }}</p>
+    </div>
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-all group">
+        <p class="text-gray-500 text-sm font-semibold uppercase">Collected</p>
+        <p class="text-3xl font-bold text-green-600 group-hover:scale-105 transition-transform">{{ stats.collected }}</p>
+    </div>
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-all group">
+        <p class="text-gray-500 text-sm font-semibold uppercase">Recycled</p>
+        <p class="text-3xl font-bold text-blue-600 group-hover:scale-105 transition-transform">{{ stats.recycled }}</p>
+    </div>
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50 hover:shadow-md transition-all group">
+        <p class="text-gray-500 text-sm font-semibold uppercase">Efficiency Score</p>
+        <p class="text-3xl font-bold text-[#3BC1A8] group-hover:scale-105 transition-transform">94.2%</p>
+    </div>
+</div>
+
+<!-- Analytics Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10 fade-in-up" style="animation-delay: 300ms;">
+    <!-- Predictive Insights -->
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50">
+        <h3 class="text-lg font-bold text-[#005461] mb-4">📈 Predictive Inflow Forecast</h3>
+        <canvas id="forecastChart" height="200"></canvas>
+        <p class="text-xs text-gray-400 mt-2 text-center">AI Projection based on historical submission trends</p>
+    </div>
+
+    <!-- Material Composition -->
+    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50">
+        <h3 class="text-lg font-bold text-[#005461] mb-4">♻️ E-Waste Composition</h3>
+        <div class="h-64 flex justify-center">
+            <canvas id="compositionChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Workforce Monitoring -->
+<div class="mb-10 fade-in-up" style="animation-delay: 400ms;">
+    <h2 class="text-2xl font-bold text-[#005461] mb-6">Workforce Overview</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Engineers & Drivers -->
+        <div class="glass p-6 rounded-2xl shadow-sm border border-white/50">
+            <h3 class="text-lg font-bold text-[#005461] mb-4">🚛 Fleet (Engineers & Drivers)</h3>
+            <ul class="space-y-3">
+                {% for eng in stats.engineers %}
+                <li class="flex justify-between items-center p-3 bg-white/40 rounded-xl border border-white/50">
+                    <span class="font-medium text-gray-700">👷 {{ eng.name }}</span>
+                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Active</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        <!-- Recyclers -->
+        <div class="glass p-6 rounded-2xl shadow-sm border border-white/50">
+            <h3 class="text-lg font-bold text-[#005461] mb-4">♻️ Recyclers</h3>
+            <ul class="space-y-3">
+                {% for rec in stats.recyclers %}
+                <li class="flex justify-between items-center p-3 bg-white/40 rounded-xl border border-white/50">
+                    <span class="font-medium text-gray-700">{{ rec.name }}</span>
+                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Processing</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<h2 class="text-2xl font-bold text-[#005461] mb-6 fade-in-up" style="animation-delay: 500ms;">Optimized Logistics Clusters</h2>
 
 {% for cluster in clusters %}
-<div class="border rounded p-4 mb-6 bg-gray-50">
+<div class="glass rounded-2xl shadow-sm overflow-hidden border border-white/50 mb-6 transition hover:shadow-lg fade-in-up" style="animation-delay: 600ms;">
 
-  <div class="flex justify-between mb-2">
+  <div class="p-6 border-b border-gray-100/50 bg-[#005461]/5 flex justify-between items-center">
     <div>
-      <p><b>Total Weight:</b> {{ cluster.total_weight }} kg</p>
-      <p><b>Users:</b> {{ cluster.user_count }}</p>
-      <p><b>Radius Used:</b> {{ cluster.radius_used_km }} km</p>
-      <p><b>Status:</b>
-        <span class="font-semibold text
-          {% if cluster.status == 'ready' %}green
-          {% elif cluster.status == 'almost_ready' %}yellow
-          {% else %}red{% endif %}">
-          {{ cluster.status }}
+      <div class="flex items-center gap-3 mb-1">
+          <h3 class="text-lg font-bold text-[#005461]">Cluster #{{ cluster._id|string|truncate(8, True, '') }}</h3>
+          <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide
+            {% if cluster.status == 'ready' %}bg-green-100 text-green-800
+            {% elif cluster.status == 'assigned' %}bg-blue-100 text-blue-800
+            {% elif cluster.status == 'out_for_delivery' %}bg-purple-100 text-purple-800
+            {% elif cluster.status == 'delivered' %}bg-emerald-100 text-emerald-800
+            {% elif cluster.status == 'almost_ready' %}bg-yellow-100 text-yellow-800
+            {% elif cluster.status == 'clustered' %}bg-indigo-100 text-indigo-800
+            {% else %}bg-red-100 text-red-800{% endif %}">
+          {{ cluster.status|replace('_', ' ')|upper }}
         </span>
-      </p>
+      </div>
+      <div class="text-sm text-gray-500 flex gap-4">
+          <span>⚖️ {{ cluster.total_weight }} g</span>
+          <span>📦 {{ cluster.user_count }} Pickups</span>
+          <span>🏭 {{ cluster.categories }}</span>
+          <span class="text-blue-600 font-semibold cursor-pointer hover:underline" onclick="viewHubInventory('{{ cluster.destination }}')">📍 {{ cluster.destination }}</span>
+      </div>
     </div>
 
     <div>
-      {% if cluster.status == "ready" %}
-        <button class="bg-green-600 text-white px-3 py-1 rounded">
-          Assign Engineer & Driver
-        </button>
+      {% if cluster.status in ["ready", "clustered", "pending"] %}
+        <form method="POST" action="/warehouse/assign/{{ cluster._id }}" class="flex items-center gap-2 flex-wrap">
+            <select name="engineer_id" class="text-sm border-gray-200 bg-white/80 rounded-lg shadow-sm focus:border-[#3BC1A8] focus:ring focus:ring-green-200 transition p-2">
+                <option value="">Select Engineer</option>
+                {% for eng in stats.engineers %}
+                    <option value="{{ eng._id }}" {% if eng.status == 'On Route' %}disabled{% endif %}>
+                        {{ eng.name }} ({{ eng.status }})
+                    </option>
+                {% endfor %}
+            </select>
+            <select name="driver_id" class="text-sm border-gray-200 bg-white/80 rounded-lg shadow-sm focus:border-[#3BC1A8] focus:ring focus:ring-green-200 transition p-2">
+                <option value="">Select Driver</option>
+                {% for drv in stats.drivers %}
+                    <option value="{{ drv._id }}" {% if drv.status == 'On Route' %}disabled{% endif %}>
+                        {{ drv.name }} ({{ drv.status }})
+                    </option>
+                {% endfor %}
+            </select>
+            <select name="destination_hub" class="text-sm border-gray-200 bg-white/80 rounded-lg shadow-sm focus:border-[#3BC1A8] focus:ring focus:ring-green-200 transition p-2" required>
+                <option value="">Select Drop-off Hub</option>
+                <option value="North Warehouse (Borivali)">North Warehouse (Borivali)</option>
+                <option value="West Warehouse (Andheri)">West Warehouse (Andheri)</option>
+                <option value="East Warehouse (Thane)">East Warehouse (Thane)</option>
+                <option value="South Warehouse (Colaba)">South Warehouse (Colaba)</option>
+            </select>
+            <button type="submit" class="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition">
+              Assign Fleet
+            </button>
+        </form>
+      {% elif cluster.status == "assigned" %}
+        <div class="text-right">
+          <p class="text-sm text-gray-600 mb-2">
+            👷 Engineer: <span class="font-bold">{{ cluster.engineer_name or 'Assigned' }}</span>
+          </p>
+          <p class="text-sm text-gray-600 mb-2">
+            🚗 Driver: <span class="font-bold">{{ cluster.driver_name or 'Assigned' }}</span>
+          </p>
+          <button onclick="markOutForDelivery('{{ cluster._id }}')" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold text-sm">
+            Mark: Out for Delivery
+          </button>
+        </div>
+      {% elif cluster.status == "out_for_delivery" %}
+        <div class="text-right">
+          <p class="text-sm text-gray-600 mb-2">
+            👷 Engineer: <span class="font-bold">{{ cluster.engineer_name or 'N/A' }}</span>
+          </p>
+          <p class="text-sm text-gray-600 mb-2">
+            🚗 Driver: <span class="font-bold">{{ cluster.driver_name or 'N/A' }}</span>
+          </p>
+          <p class="text-sm text-purple-600 font-bold mb-2">🚗 Out for Collection</p>
+          <button onclick="markDelivered('{{ cluster._id }}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold text-sm">
+            Mark: Delivered
+          </button>
+        </div>
+      {% elif cluster.status == "delivered" %}
+        <div class="text-right">
+          <p class="text-sm text-gray-600 mb-2">
+            👷 Engineer: <span class="font-bold">{{ cluster.engineer_name or 'N/A' }}</span>
+          </p>
+          <p class="text-sm text-gray-600 mb-2">
+            🚗 Driver: <span class="font-bold">{{ cluster.driver_name or 'N/A' }}</span>
+          </p>
+          <span class="text-sm text-emerald-600 font-bold">✓ Delivered to Warehouse</span>
+        </div>
       {% elif cluster.status == "almost_ready" %}
         <form method="POST" action="/warehouse/approve/{{ cluster._id }}">
-          <button class="bg-yellow-600 text-white px-3 py-1 rounded">
-            Approve (85kg+) & Assign
+          <button class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-semibold shadow-sm transition">
+            Force Approve
           </button>
         </form>
       {% else %}
-        <p class="text-gray-500">Waiting for more users</p>
+        <div class="text-right">
+          <p class="text-sm text-gray-600 mb-2">
+            {% if cluster.engineer_name %}👷 Engineer: <span class="font-bold">{{ cluster.engineer_name }}</span>{% else %}<span class="text-gray-400">Engineer: Pending</span>{% endif %}
+          </p>
+          <p class="text-sm text-gray-600">
+            {% if cluster.driver_name %}🚗 Driver: <span class="font-bold">{{ cluster.driver_name }}</span>{% else %}<span class="text-gray-400">Driver: Pending</span>{% endif %}
+          </p>
+        </div>
       {% endif %}
     </div>
   </div>
 
-  <hr class="my-3">
-
-  <p class="font-semibold mb-2">Users in this Route:</p>
-  <table class="w-full border text-sm">
-    <thead class="bg-gray-200">
-      <tr>
-        <th class="border p-1">Name</th>
-        <th class="border p-1">Address</th>
-        <th class="border p-1">Weight (kg)</th>
-        <th class="border p-1">Distance (km)</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for u in cluster.user_details %}
-      <tr>
-        <td class="border p-1">{{ u.name }}</td>
-        <td class="border p-1">{{ u.address }}</td>
-        <td class="border p-1">{{ u.weight }}</td>
-        <td class="border p-1">{{ u.distance }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div>
+      <h4 class="font-semibold text-gray-700">Route Preview</h4>
+      <p class="text-sm text-gray-500">{{ cluster.route_summary or 'N/A' }}</p>
+      <a href="{{ url_for('warehouse.view_route', cluster_id=cluster._id) }}" target="_blank" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 mt-2 inline-flex items-center gap-1"><span>🗺️</span> View Map</a>
+    </div>
+    <div>
+      <h4 class="font-semibold text-gray-700">Scheduled</h4>
+      <p class="text-sm text-gray-500">{{ cluster.scheduled_for or 'TBD' }}</p>
+    </div>
+    <div>
+      <h4 class="font-semibold text-gray-700">Destination</h4>
+      <p class="text-sm text-blue-600 font-semibold">{{ cluster.destination }}</p>
+    </div>
+  </div>
 
 </div>
-{% else %}
-<p>No clusters created yet.</p>
 {% endfor %}
+
+<!-- Scripts -->
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    // Data from Flask
+    const chartLabels = {{ stats.chart_labels | tojson }};
+    const chartValues = {{ stats.chart_values | tojson }};
+    const forecastLabels = {{ stats.forecast_labels | tojson }};
+    const forecastValues = {{ stats.forecast_values | tojson }};
+
+    // Composition Chart (Doughnut)
+    const compCtx = document.getElementById('compositionChart');
+    if (compCtx) {
+        new Chart(compCtx, {
+            type: 'doughnut',
+            data: { labels: chartLabels, datasets: [{ data: chartValues, backgroundColor: ['#005461','#3BC1A8','#F0FFDF','#FFD166','#EF476F'], borderWidth: 0 }]},
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+    }
+
+    // Forecast Chart (Line)
+    const foreCtx = document.getElementById('forecastChart');
+    if (foreCtx) {
+        new Chart(foreCtx, {
+            type: 'line',
+            data: { labels: forecastLabels, datasets: [{ label: 'Predicted E-Waste Inflow (grams)', data: forecastValues, borderColor: '#3BC1A8', backgroundColor: 'rgba(59,193,168,0.1)', tension: 0.4, fill: true }]},
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    // Status transition functions
+    window.markOutForDelivery = function(clusterId){
+        if(!confirm('Mark cluster as "Out for Delivery"?')) return;
+        fetch(`/warehouse/update-cluster-status/${clusterId}`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'out_for_delivery'}) })
+            .then(r=>r.json()).then(d=>{ if(d.success) location.reload(); }).catch(e=>console.error(e));
+    }
+
+    window.markDelivered = function(clusterId){
+        if(!confirm('Mark cluster as "Delivered" to warehouse?')) return;
+        fetch(`/warehouse/update-cluster-status/${clusterId}`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'delivered'}) })
+            .then(r=>r.json()).then(d=>{ if(d.success) location.reload(); }).catch(e=>console.error(e));
+    }
+
+    // Hub inventory
+    window.viewHubInventory = function(hubName){
+        if(!hubName) return alert('No hub specified');
+        const modal = document.getElementById('hubInventoryModal');
+        const loading = document.getElementById('hubLoading');
+        const content = document.getElementById('hubContent');
+        modal.style.display = 'flex'; loading.style.display = 'flex'; content.style.display = 'none';
+        fetch(`/warehouse/hub-inventory/${encodeURIComponent(hubName)}`)
+            .then(r=>r.json())
+            .then(data=>{ loading.style.display='none'; renderHubInventory(data); content.style.display='block'; })
+            .catch(e=>{ loading.innerHTML = '<p class="text-red-600">Error loading hub inventory</p>'; console.error(e); });
+    }
+
+    function renderHubInventory(data){
+        const content = document.getElementById('hubContent'); if(!content) return;
+        let categoryHtml = '';
+        for(const [cat,cnt] of Object.entries(data.category_breakdown||{})) categoryHtml += `<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">${cat}: ${cnt}</span>`;
+        let pickupsHtml = '';
+        (data.pickups||[]).forEach(p=>{
+            const weight = p.final_weight||p.approx_weight||0;
+            const quality = p.final_quality?`<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">${p.final_quality}</span>`:'';
+            pickupsHtml += `
+                <div class="p-4 bg-white/50 rounded-lg border border-gray-200 mb-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h4 class="font-bold text-[#005461]">${p.user_name} — ${p.ewaste_type}</h4>
+                            <p class="text-sm text-gray-600">${p.address||''} • ${p.area||''}</p>
+                        </div>
+                        ${quality}
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <span>⚖️ Weight: <strong>${weight} g</strong></span>
+                        <span>💰 Value: <strong>₹${p.estimated_value||0}</strong></span>
+                        <span>🏷️ Metal: <strong>${p.metal_type||'N/A'}</strong></span>
+                        <span>📅 Collected: <strong>${p.collected_at? new Date(p.collected_at).toLocaleDateString() : 'N/A'}</strong></span>
+                    </div>
+                    ${(p.items && p.items.length)?`<p class="text-xs text-gray-500 mt-2">Items: ${p.items.length}</p>`:''}
+                </div>`;
+        });
+        content.innerHTML = `
+            <h3 class="text-2xl font-bold text-[#005461] mb-4">${data.hub}</h3>
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 p-4 rounded-lg"><p class="text-gray-600 text-sm">Total Pickups</p><p class="text-3xl font-bold text-blue-600">${data.total_pickups||0}</p></div>
+                <div class="bg-green-50 p-4 rounded-lg"><p class="text-gray-600 text-sm">Total Weight</p><p class="text-3xl font-bold text-green-600">${data.total_weight||0} g</p></div>
+                <div class="bg-purple-50 p-4 rounded-lg"><p class="text-gray-600 text-sm">Estimated Value</p><p class="text-3xl font-bold text-purple-600">₹${data.total_estimated_value||0}</p></div>
+                <div class="bg-orange-50 p-4 rounded-lg"><p class="text-gray-600 text-sm">Categories</p><p class="text-3xl font-bold text-orange-600">${Object.keys(data.category_breakdown||{}).length}</p></div>
+            </div>
+            <div class="mb-4"><h4 class="font-semibold text-gray-700 mb-2">Category Breakdown:</h4><div class="flex flex-wrap gap-2">${categoryHtml}</div></div>
+            <div><h4 class="font-semibold text-gray-700 mb-3">Stored Items:</h4><div class="max-h-96 overflow-y-auto">${pickupsHtml}</div></div>`;
+    }
+
+    window.closeHubModal = function(){ document.getElementById('hubInventoryModal').style.display='none'; }
+    document.addEventListener('click', function(e){ const modal = document.getElementById('hubInventoryModal'); if(modal && e.target===modal) closeHubModal(); });
+});
+</script>
+
+<!-- Hub Inventory Modal -->
+<div id="hubInventoryModal" style="display: none;" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-[#005461] to-[#3BC1A8] flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-white">🏭 Hub Network Inventory</h2>
+            <button onclick="closeHubModal()" class="text-white hover:bg-white/20 p-2 rounded-lg transition">✕</button>
+        </div>
+        <div id="hubLoading" class="flex-1 flex items-center justify-center"><div class="text-center"><div class="text-4xl mb-3">⏳</div><p class="text-gray-600">Loading hub inventory...</p></div></div>
+        <div id="hubContent" style="display: none;" class="flex-1 overflow-y-auto p-6"></div>
+    </div>
+</div>
 
 {% endblock %}

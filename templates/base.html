@@ -5,27 +5,186 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E-Waste Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+        
+        :root {
+            --primary: #005461;
+            --accent: #3BC1A8;
+        }
+
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background-color: #f0fdf4; /* Green-50 */
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 193, 168, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 84, 97, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        
+        .nav-link {
+            position: relative;
+            transition: color 0.3s ease;
+        }
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: -4px;
+            left: 0;
+            background-color: #3BC1A8;
+            transition: width 0.3s ease;
+        }
+        .nav-link:hover::after {
+            width: 100%;
+        }
+        
+        .btn-primary-nav {
+            background: linear-gradient(135deg, #005461 0%, #00798c 100%);
+            color: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 84, 97, 0.2);
+        }
+        .btn-primary-nav:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 84, 97, 0.3);
+        }
+
+        /* Profile Panel Transitions */
+        #profile-panel {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+        #profile-panel.open { transform: translateX(0); }
+
+        /* Glassmorphism Utilities */
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+        }
+
+        /* Page Animation */
+        .fade-in-up {
+            animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3BC1A8; }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
-    <nav class="bg-white shadow p-4 mb-6">
-        <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="font-bold text-xl text-green-600">E-Waste App</a>
-            <div>
+<body class="text-gray-800 antialiased selection:bg-[#3BC1A8] selection:text-white">
+    <nav class="glass-nav sticky top-0 z-50 mb-8 transition-all duration-300">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="flex items-center gap-2 group">
+                <span class="text-3xl filter drop-shadow-sm group-hover:rotate-12 transition-transform duration-300">♻️</span>
+                <span class="font-extrabold text-2xl tracking-tight text-[#005461] group-hover:text-[#3BC1A8] transition-colors">
+                    Eco<span class="text-[#3BC1A8] group-hover:text-[#005461] transition-colors">Logistics</span>
+                </span>
+            </a>
+            
+            <div class="flex items-center gap-6 font-medium text-sm">
                 {% if session.get('user_id') %}
-                    <span class="mr-4 text-sm font-semibold text-gray-600">Role: {{ session.get('role')|upper }}</span>
-                    <a href="/logout" class="text-red-500 hover:underline text-sm">Logout</a>
+                    <!-- Profile Trigger -->
+                    <button onclick="toggleProfile()" class="flex items-center gap-2 hover:bg-gray-100 px-3 py-2 rounded-lg transition">
+                        <div class="w-8 h-8 bg-[#005461] text-white rounded-full flex items-center justify-center font-bold text-xs">
+                            {{ session.get('role')[0]|upper }}
+                        </div>
+                        <span class="hidden md:inline text-gray-700 font-semibold">{{ session.get('role')|capitalize }}</span>
+                    </button>
+                    
+                    {% if session.get('role') == 'user' %}
+                        <a href="/user/dashboard" class="nav-link text-gray-600 hover:text-[#005461]">Request Pickup</a>
+                    {% elif session.get('role') == 'warehouse' %}
+                        <a href="/warehouse/dashboard" class="nav-link text-gray-600 hover:text-[#005461]">Warehouse</a>
+                    {% elif session.get('role') == 'engineer' %}
+                        <a href="/engineer/dashboard" class="nav-link text-gray-600 hover:text-[#005461]">Fleet</a>
+                    {% elif session.get('role') == 'recycler' %}
+                        <a href="/recycler/dashboard" class="nav-link text-gray-600 hover:text-[#005461]">Recycling</a>
+                    {% endif %}
+                {% else %}
+                    <a href="{{ url_for('auth.login') }}" class="nav-link text-gray-600 hover:text-[#005461]">Login</a>
+                    <a href="{{ url_for('auth.register') }}" class="btn-primary-nav px-5 py-2 rounded-lg font-semibold">Register</a>
                 {% endif %}
             </div>
         </div>
     </nav>
 
-    <div class="container mx-auto px-4">
+    <div class="container mx-auto px-4 fade-in-up min-h-[80vh]">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4">{{ messages[0] }}</div>
+                <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 mb-6 rounded-r-lg shadow-sm flex items-center gap-3">
+                    <span class="text-xl">ℹ️</span> {{ messages[0] }}
+                </div>
             {% endif %}
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
+
+    <!-- Right Side Profile Panel -->
+    {% if session.get('user_id') %}
+    <div id="profile-overlay" onclick="toggleProfile()" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity"></div>
+    
+    <div id="profile-panel" class="fixed top-0 right-0 h-full w-80 bg-white/95 backdrop-blur-xl shadow-2xl z-50 overflow-y-auto border-l border-gray-100">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-bold text-[#005461]">My Profile</h2>
+                <button onclick="toggleProfile()" class="text-gray-400 hover:text-red-500 text-2xl">&times;</button>
+            </div>
+
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-gray-100 rounded-full mx-auto flex items-center justify-center text-3xl mb-3 text-[#005461]">
+                    👤
+                </div>
+                <p class="font-bold text-lg text-gray-800">{{ session.get('email') }}</p>
+                <span class="bg-[#F0FFDF] text-[#005461] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border border-[#3BC1A8]">
+                    {{ session.get('role') }}
+                </span>
+            </div>
+
+            {% if session.get('role') == 'user' %}
+            <div class="bg-[#F0FFDF] rounded-xl p-4 mb-6 border border-[#3BC1A8]">
+                <p class="text-sm text-gray-600 font-semibold uppercase mb-1">Total Impact</p>
+                <p class="text-3xl font-bold text-[#005461]">
+                    <span id="panel-total-weight">--</span> <span class="text-sm">kg</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">E-Waste Donated</p>
+            </div>
+            {% endif %}
+
+            <div class="border-t border-gray-100 pt-6">
+                <a href="{{ url_for('auth.logout') }}" class="block w-full bg-red-50 text-red-600 text-center py-3 rounded-lg font-bold hover:bg-red-100 transition">
+                    Sign Out
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleProfile() {
+            document.getElementById('profile-panel').classList.toggle('open');
+            document.getElementById('profile-overlay').classList.toggle('hidden');
+        }
+    </script>
+    {% endif %}
+
+    <!-- Notifications Panel -->
+    {% include 'notifications_panel.html' %}
 </body>
 </html>

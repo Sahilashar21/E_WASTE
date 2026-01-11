@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    
+    <!-- Active Jobs Section -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">🚛 My Active Routes</h2>
+        {% if my_jobs %}
+            {% for job in my_jobs %}
+            <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 mb-4">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="font-bold text-lg">Route #{{ job._id|string|truncate(8, True, '') }}</h3>
+                        <p class="text-gray-500 text-sm">{{ job.users|length }} Pickups • {{ job.total_weight }}kg Total</p>
+                    </div>
+                    <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded">IN PROGRESS</span>
+                </div>
+                
+                <div class="space-y-2 mb-4">
+                    {% for u in job.users %}
+                    <div class="flex justify-between text-sm border-b border-gray-100 pb-1">
+                        <span>Pickup #{{ loop.index }}</span>
+                        <span class="font-mono">{{ u.weight }}kg</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="flex gap-2">
+                    <a href="https://www.google.com/maps/dir/?api=1&destination={{ job.anchor_location.lat }},{{ job.anchor_location.lng }}" target="_blank" class="flex-1 bg-gray-100 text-gray-700 text-center py-2 rounded hover:bg-gray-200 font-semibold">
+                        📍 Navigate
+                    </a>
+                    <a href="{{ url_for('engineer.complete_job', cluster_id=job._id) }}" class="flex-1 bg-green-600 text-white text-center py-2 rounded hover:bg-green-700 font-semibold">
+                        ✅ Mark Complete
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="bg-gray-50 p-8 rounded-xl text-center border-2 border-dashed border-gray-300">
+                <p class="text-gray-500">No active routes. Select one from available jobs.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Available Jobs Section -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">📋 Available for Pickup</h2>
+        {% if available %}
+            {% for cluster in available %}
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-4 opacity-90 hover:opacity-100 transition">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-gray-700">Cluster #{{ cluster._id|string|truncate(8, True, '') }}</h3>
+                    <span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">READY</span>
+                </div>
+                <p class="text-gray-600 mb-4">Contains {{ cluster.users|length }} shipments totaling {{ cluster.total_weight }}kg.</p>
+                <a href="{{ url_for('engineer.accept_job', cluster_id=cluster._id) }}" class="block w-full bg-gray-800 text-white text-center py-2 rounded hover:bg-black font-semibold">
+                    Accept Job
+                </a>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-gray-500">No optimized routes available from warehouse yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

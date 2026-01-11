@@ -1,0 +1,248 @@
+<!-- templates/engineer/route.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Engineer Route View</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Routing -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    #map { height: 100vh; width: 100vw; }
+    
+    {% if view_only %}
+    #startBtn { display: none !important; }
+    .driver-status-card {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        padding: 15px;
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border: 1px solid rgba(255,255,255,0.5);
+        min-width: 220px;
+    }
+    {% else %}
+    #startBtn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      color: #005461;
+      padding: 12px 24px;
+      border-radius: 16px;
+      font-weight: 800;
+      font-size: 16px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    #startBtn:hover {
+      background: rgba(255, 255, 255, 0.85);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      color: #3BC1A8;
+    }
+    {% endif %}
+    
+    .leaflet-routing-container {
+      background: rgba(255, 255, 255, 0.8) !important;
+      backdrop-filter: blur(10px) !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(255, 255, 255, 0.5) !important;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
+    }
+  </style>
+</head>
+
+<body>
+
+{% if view_only %}
+<div class="driver-status-card">
+    <h3 style="margin:0 0 5px 0; color:#005461; font-weight:800;">🚚 Live Tracking</h3>
+    <div id="connectionStatus" style="font-size:13px; color:gray; font-weight:500;">Connecting to driver...</div>
+</div>
+{% else %}
+<button id="startBtn" onclick="startTrip()">
+  <span>🗺️</span> View Route & Navigate
+</button>
+{% endif %}
+<div id="map"></div>
+
+<script type="application/json" id="route-data">
+{{ waypoints | tojson }}
+</script>
+
+<script>
+let map = L.map("map").setView([19.076, 72.877], 12);
+let routingControl = null;
+let driverMarker = null;
+let watchId = null;
+
+let waypoints = [];
+try {
+  waypoints = JSON.parse(document.getElementById("route-data").textContent);
+} catch (e) {
+  console.error("Error parsing waypoints", e);
+}
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// VIEW ONLY LOGIC (Warehouse/User)
+const VIEW_ONLY = {{ view_only|default(false)|tojson }};
+const DRIVER_ID = {{ driver_id|default(none)|tojson }};
+let liveDriverMarker = null;
+
+if (VIEW_ONLY) {
+    // 1. Plot all pickup points immediately
+    if (waypoints.length > 0) {
+        const bounds = [];
+        waypoints.forEach((wp, i) => {
+            L.marker([wp.lat, wp.lng])
+                .addTo(map)
+                .bindPopup(`<b>Pickup #${i+1}</b><br>${wp.address}`);
+            bounds.push([wp.lat, wp.lng]);
+        });
+        map.fitBounds(bounds, {padding: [50, 50]});
+
+        // 1.5 Draw the route path (Visual only, no controls)
+        if (waypoints.length > 1) {
+            L.Routing.control({
+                waypoints: waypoints.map(wp => L.latLng(wp.lat, wp.lng)),
+                optimizeWaypoints: true,
+                routeWhileDragging: false,
+                addWaypoints: false,
+                draggableWaypoints: false,
+                show: false,
+                lineOptions: { styles: [{color: '#005461', opacity: 0.6, weight: 5}] },
+                createMarker: function() { return null; } // Use our custom markers above
+            }).addTo(map);
+        }
+    }
+
+    // 2. Poll for driver location
+    if (DRIVER_ID) {
+        setInterval(updateDriverLocation, 5000);
+        updateDriverLocation();
+    } else {
+        document.getElementById('connectionStatus').innerText = "Waiting for driver assignment...";
+    }
+}
+
+function updateDriverLocation() {
+    fetch(`/warehouse/api/public/driver-location/${DRIVER_ID}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.lat && data.lng) {
+                const latlng = [data.lat, data.lng];
+                if (!liveDriverMarker) {
+                    liveDriverMarker = L.marker(latlng, {
+                        icon: L.icon({
+                            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3097/3097136.png', // Car Icon
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 20]
+                        })
+                    }).addTo(map).bindPopup("<b>Driver Live Location</b>");
+                } else {
+                    liveDriverMarker.setLatLng(latlng);
+                }
+                document.getElementById('connectionStatus').innerHTML = `<span style="color:#10b981">●</span> Live Updated`;
+            } else {
+                document.getElementById('connectionStatus').innerText = "Driver location unavailable";
+            }
+        })
+        .catch(e => console.error(e));
+}
+
+function startTrip() {
+  if (!navigator.geolocation) {
+    alert("GPS not supported");
+    return;
+  }
+
+  const btn = document.getElementById('startBtn');
+  btn.innerHTML = '<span>📍</span> Locating...';
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      btn.innerHTML = '<span>📍</span> Route Active';
+      const startLatLng = [pos.coords.latitude, pos.coords.longitude];
+
+      map.setView(startLatLng, 15);
+
+      if (!driverMarker) {
+        driverMarker = L.marker(startLatLng, {
+            icon: L.icon({
+                iconUrl: 'https://cdn-icons-png.flaticon.com/512/3097/3097136.png',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            })
+        }).addTo(map);
+      } else {
+        driverMarker.setLatLng(startLatLng);
+      }
+
+      if (routingControl) {
+        map.removeControl(routingControl);
+      }
+
+      const routePoints = [
+        L.latLng(startLatLng[0], startLatLng[1]),
+        ...waypoints.map(wp => L.latLng(wp.lat, wp.lng))
+      ];
+
+      routingControl = L.Routing.control({
+        waypoints: routePoints,
+        optimizeWaypoints: true,
+        routeWhileDragging: false,
+        addWaypoints: false,
+        show: true,
+        lineOptions: {
+            styles: [{color: '#005461', opacity: 0.8, weight: 6}]
+        },
+        createMarker: function(i, wp, nWps) {
+            if (i === 0) return null;
+            return L.marker(wp.latLng).bindPopup("Stop " + i);
+        }
+      }).addTo(map);
+
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          const newPos = [pos.coords.latitude, pos.coords.longitude];
+          if (driverMarker) driverMarker.setLatLng(newPos);
+        },
+        err => console.error("GPS error: " + err.message),
+        { enableHighAccuracy: true }
+      );
+    },
+    err => {
+        alert("Location permission denied");
+        btn.innerHTML = '<span>🗺️</span> View Route & Navigate';
+    }
+  );
+}
+</script>
+
+</body>
+</html>

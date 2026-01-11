@@ -3,9 +3,9 @@ from werkzeug.security import generate_password_hash
 from pymongo import MongoClient
 import os
 
-mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/e_waste')
+mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ewaste_db')
 client = MongoClient(mongo_uri)
-db = client.get_default_database()
+db = client['ewaste_db']
 users = db['users']
 
 def create_demo_user(name, email, mobile, address, age, password, role):

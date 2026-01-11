@@ -126,7 +126,10 @@
   {% endif %}
 {% endwith %}
 
-<h1 class="text-3xl font-bold mb-6 tracking-tight">Request E-Waste Pickup</h1>
+<div class="flex items-center gap-3 mb-6">
+  <a href="{{ url_for('user.dashboard') }}" class="bg-gray-300 text-gray-700 px-3 py-2 rounded-lg font-semibold hover:bg-gray-400">← Back to Dashboard</a>
+  <h1 class="text-3xl font-bold tracking-tight">Request E-Waste Pickup</h1>
+</div>
 
 <form method="POST" action="/user/request" enctype="multipart/form-data" class="pickup-form p-6 md:p-8 mb-10">
 
@@ -538,5 +541,11 @@
           status.className = 'absolute right-3 top-3.5 text-red-500 text-sm pointer-events-none';
       }
   }
+
+  // Update Profile Panel Stats if available
+  document.addEventListener('DOMContentLoaded', function() {
+      const panelWeight = document.getElementById('panel-total-weight');
+      if(panelWeight) panelWeight.innerText = "{{ total_donated / 1000 if total_donated else 0 }}";
+  });
 </script>
 {% endblock %}

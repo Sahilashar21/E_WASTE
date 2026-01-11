@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+  .stagger-1 { animation-delay: 100ms; }
+  .stagger-2 { animation-delay: 200ms; }
+  .stagger-3 { animation-delay: 300ms; }
+  .stagger-4 { animation-delay: 400ms; }
+</style>
+
+<div class="max-w-6xl mx-auto mt-8">
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row items-center justify-between mb-8 gap-4 fade-in-up">
+    <div>
+      <h1 class="text-4xl font-bold text-[#005461] mb-1">Welcome, {{ session.get('name', 'User') }}</h1>
+      <p class="text-gray-500 font-medium">Here is your eco-impact overview</p>
+    </div>
+    <div class="flex gap-3">
+      <a href="{{ url_for('user.create_request') }}" class="bg-gradient-to-r from-[#3BC1A8] to-[#2ea891] text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2">
+        <span>🚛</span> Request Pickup
+      </a>
+      <a href="{{ url_for('payment.my_invoices') }}" class="glass bg-white/60 text-[#005461] border border-[#005461]/20 px-4 py-3 rounded-xl font-bold hover:bg-white transition-all flex items-center gap-2">
+        <span>🧾</span> Earnings
+      </a>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 fade-in-up stagger-1">
+    <div class="glass p-6 rounded-2xl shadow-sm border-l-4 border-[#3BC1A8] relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+      <div class="absolute inset-0 bg-gradient-to-r from-transparent to-green-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+      <div class="absolute right-0 top-0 p-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">⚖️</div>
+      <div class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total Donated</div>
+      <div class="text-3xl font-extrabold text-[#005461]">{{ total_donated }} <span class="text-lg text-gray-400">g</span></div>
+    </div>
+    
+    <div class="glass p-6 rounded-2xl shadow-sm border-l-4 border-blue-500 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+      <div class="absolute inset-0 bg-gradient-to-r from-transparent to-blue-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+      <div class="absolute right-0 top-0 p-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">📝</div>
+      <div class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total Requests</div>
+      <div class="text-3xl font-extrabold text-[#005461]">{{ requests|length }}</div>
+    </div>
+
+    <div class="glass p-6 rounded-2xl shadow-sm border-l-4 border-yellow-500 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+      <div class="absolute inset-0 bg-gradient-to-r from-transparent to-yellow-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+      <div class="absolute right-0 top-0 p-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">⏳</div>
+      <div class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Active / Pending</div>
+      <div class="text-3xl font-extrabold text-yellow-600">{{ requests|selectattr('status', 'equalto', 'pending')|list|length }}</div>
+    </div>
+  </div>
+
+  <!-- Recent Requests -->
+  <h2 class="text-2xl font-bold text-[#005461] mb-6 flex items-center gap-2 fade-in-up stagger-2">
+    <span>📅</span> Recent Activity
+  </h2>
+  
+  <div class="space-y-4">
+    {% for r in requests %}
+    <div class="glass p-6 rounded-2xl shadow-sm hover:shadow-lg hover:scale-[1.01] transition-all duration-300 border border-white/50 flex flex-col md:flex-row justify-between items-center gap-4 fade-in-up stagger-3">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl
+            {% if r.status == 'collected' %}bg-green-100 text-green-600
+            {% elif r.status == 'rejected' %}bg-red-100 text-red-600
+            {% else %}bg-yellow-100 text-yellow-600{% endif %}">
+            {% if r.status == 'collected' %}✓{% elif r.status == 'rejected' %}✕{% else %}⟳{% endif %}
+        </div>
+        <div>
+            <div class="font-bold text-lg text-[#005461]">{{ r.ewaste_type }}</div>
+            <div class="text-sm text-gray-500 font-medium">{{ r.area }} • {{ r.created_at.strftime('%d %b %Y') if r.created_at else 'Date N/A' }}</div>
+        </div>
+      </div>
+      
+      <div class="text-right flex flex-col items-end">
+        <div class="font-bold text-xl text-[#3BC1A8]">{{ r.approx_weight }} g</div>
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide mt-1
+            {% if r.status == 'collected' %}bg-green-100 text-green-800
+            {% elif r.status == 'rejected' %}bg-red-100 text-red-800
+            {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+            {{ r.status }}
+        </span>
+        {% if r.status in ['out_for_delivery', 'assigned'] %}
+        <a href="{{ url_for('warehouse.track_order', pickup_id=r._id) }}" target="_blank" class="mt-2 text-xs bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-200 flex items-center gap-1 transition-colors">
+            <span>🚚</span> Track Driver
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="glass p-12 rounded-2xl text-center border-2 border-dashed border-gray-300 fade-in-up stagger-3">
+        <div class="text-6xl mb-4 opacity-20">📦</div>
+        <p class="text-xl text-gray-500 font-medium">No pickup requests found.</p>
+        <p class="text-gray-400 mb-6">Start your recycling journey today!</p>
+        <a href="{{ url_for('user.create_request') }}" class="text-[#3BC1A8] font-bold hover:underline">Create your first request →</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

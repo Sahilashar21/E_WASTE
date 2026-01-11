@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Driver Multi-Stop Navigation</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Routing -->
+  <link rel="stylesheet"
+    href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+
+    .control-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+    }
+
+    .control-panel h3 {
+      margin-bottom: 15px;
+      color: #005461;
+      font-weight: 800;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    #startBtn {
+      background: linear-gradient(135deg, #3BC1A8 0%, #2ea891 100%);
+      color: white;
+      flex: 1;
+    }
+
+    #startBtn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(59, 193, 168, 0.3);
+    }
+
+    #startBtn:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+    }
+
+    #stopBtn {
+      background: #ef4444;
+      color: white;
+      flex: 1;
+    }
+
+    #stopBtn:hover {
+      background: #dc2626;
+    }
+
+    #stopBtn:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+    }
+
+    .stops-list {
+      background: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 10px;
+      max-height: 250px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+    }
+
+    .stop-item {
+      padding: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stop-item:last-child {
+      border-bottom: none;
+    }
+
+    .stop-item.active {
+      background: #d1fae5;
+      font-weight: 600;
+    }
+
+    .stop-item.completed {
+      background: #f0fdf4;
+      color: #059669;
+    }
+
+    .stop-info {
+      flex: 1;
+    }
+
+    .stop-num {
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+
+    .stop-addr {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .stop-status {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #dbeafe;
+      color: #0369a1;
+    }
+
+    .stop-item.completed .stop-status {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .status-info {
+      padding: 12px;
+      background: #eff6ff;
+      border-left: 4px solid #0284c7;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #0c4a6e;
+    }
+
+    .route-stats {
+      font-size: 12px;
+      padding: 8px;
+      background: #f3f4f6;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    .stat-line {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .stat-line:last-child {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="control-panel">
+  <h3>📍 Route Navigation</h3>
+  
+  <div class="button-group">
+    <button id="startBtn" onclick="startTrip()">Start Trip</button>
+    <button id="stopBtn" onclick="stopTrip()" disabled>Stop Trip</button>
+  </div>
+
+  <div id="statusInfo" class="status-info" style="display:none;">
+    <strong>Current Stop:</strong> <span id="currentStopText">-</span>
+  </div>
+
+  <h4 style="margin: 15px 0 10px 0; font-size: 14px; color: #374151;">Stops in Cluster:</h4>
+  <div class="stops-list" id="stopsList"></div>
+
+  <div class="route-stats" id="routeStats"></div>
+</div>
+
+<div id="map"></div>
+
+<!-- WAYPOINT DATA FROM BACKEND -->
+<script type="application/json" id="route-data">
+{{ waypoints | tojson }}
+</script>
+
+<script>
+let map = L.map("map").setView([19.076, 72.877], 12);
+let routingControl = null;
+let driverMarker = null;
+let watchId = null;
+let currentStopIndex = 0;
+let tripActive = false;
+let currentRoute = null;
+let routeSegments = [];
+let allMarkers = [];
+
+const waypoints = JSON.parse(
+  document.getElementById("route-data").textContent
+);
+
+// Map tiles
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19
+}).addTo(map);
+
+// Initialize stops list UI
+function initializeStopsUI() {
+  const stopsList = document.getElementById("stopsList");
+  stopsList.innerHTML = "";
+  
+  waypoints.forEach((wp, idx) => {
+    const stopDiv = document.createElement("div");
+    stopDiv.className = "stop-item";
+    stopDiv.id = `stop-${idx}`;
+    stopDiv.innerHTML = `
+      <div class="stop-info">
+        <div class="stop-num">Stop ${idx + 1}</div>
+        <div class="stop-addr">${wp.address || `${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}`}</div>
+      </div>
+      <div class="stop-status">Pending</div>
+    `;
+    stopsList.appendChild(stopDiv);
+  });
+}
+
+function startTrip() {
+  if (!navigator.geolocation) {
+    alert("GPS not supported");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const startLatLng = [pos.coords.latitude, pos.coords.longitude];
+      tripActive = true;
+      currentStopIndex = 0;
+
+      // UI Updates
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("stopBtn").disabled = false;
+      document.getElementById("statusInfo").style.display = "block";
+
+      // Center map on driver
+      map.setView(startLatLng, 15);
+
+      // Driver marker
+      driverMarker = L.marker(startLatLng, {
+        icon: L.icon({
+          iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-blue.png",
+          shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+          iconSize: [25, 41],
+          shadowSize: [41, 41],
+          iconAnchor: [12, 41],
+          shadowAnchor: [12, 41],
+          popupAnchor: [1, -34]
+        })
+      }).addTo(map).bindPopup("Driver Location");
+
+      // Add markers for all stops with different colors
+      waypoints.forEach((wp, idx) => {
+        const color = idx === 0 ? "green" : "red";
+        const marker = L.marker([wp.lat, wp.lng], {
+          icon: L.icon({
+            iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-${color}.png`,
+            shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+            iconSize: [25, 41],
+            shadowSize: [41, 41],
+            iconAnchor: [12, 41],
+            shadowAnchor: [12, 41],
+            popupAnchor: [1, -34]
+          })
+        }).addTo(map).bindPopup(`<strong>Stop ${idx + 1}</strong><br>${wp.address || 'Pickup Location'}`);
+        allMarkers.push(marker);
+      });
+
+      initializeStopsUI();
+
+      // Start routing through each stop sequentially
+      routeToNextStop(startLatLng);
+
+      // REAL-TIME DRIVER TRACKING
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          const newPos = [pos.coords.latitude, pos.coords.longitude];
+          driverMarker.setLatLng(newPos);
+          
+          // Share location with engineer in real-time
+          shareLocationWithEngineer(newPos);
+        },
+        err => console.error("GPS error: " + err.message),
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    },
+    err => alert("Location permission denied")
+  );
+}
+
+function routeToNextStop(currentLatLng) {
+  if (!tripActive || currentStopIndex >= waypoints.length) {
+    completeTrip();
+    return;
+  }
+
+  const nextStop = waypoints[currentStopIndex];
+  
+  // Update UI
+  updateStopUI(currentStopIndex, "active");
+  document.getElementById("currentStopText").textContent = `Stop ${currentStopIndex + 1}`;
+
+  // Remove old route
+  if (routingControl) {
+    map.removeControl(routingControl);
+  }
+
+  // Create route to next stop
+  const routePoints = [
+    L.latLng(currentLatLng[0], currentLatLng[1]),
+    L.latLng(nextStop.lat, nextStop.lng)
+  ];
+
+  routingControl = L.Routing.control({
+    waypoints: routePoints,
+    routeWhileDragging: false,
+    addWaypoints: false,
+    show: false,
+    lineOptions: {
+      styles: [{ color: '#0284c7', weight: 5, opacity: 0.7 }]
+    }
+  }).addTo(map);
+
+  // Store current route for sharing with engineer
+  currentRoute = {
+    from: { lat: currentLatLng[0], lng: currentLatLng[1] },
+    to: { lat: nextStop.lat, lng: nextStop.lng },
+    stopNumber: currentStopIndex + 1,
+    address: nextStop.address
+  };
+
+  // Share route with engineer
+  shareRouteWithEngineer(currentRoute);
+
+  // Simulate progress - move to next stop after 30 seconds (in production, use distance/speed calculation)
+  setTimeout(() => {
+    if (tripActive && currentStopIndex < waypoints.length) {
+      updateStopUI(currentStopIndex, "completed");
+      currentStopIndex++;
+      
+      // Get current driver position and route to next
+      navigator.geolocation.getCurrentPosition(pos => {
+        const newLatLng = [pos.coords.latitude, pos.coords.longitude];
+        routeToNextStop(newLatLng);
+      });
+    }
+  }, 30000);
+}
+
+function updateStopUI(index, status) {
+  const stopElement = document.getElementById(`stop-${index}`);
+  if (stopElement) {
+    stopElement.classList.remove("active", "completed");
+    if (status === "active") {
+      stopElement.classList.add("active");
+    } else if (status === "completed") {
+      stopElement.classList.add("completed");
+      stopElement.querySelector(".stop-status").textContent = "✓ Completed";
+    }
+  }
+}
+
+function stopTrip() {
+  tripActive = false;
+  
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+  }
+
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("stopBtn").disabled = true;
+  document.getElementById("statusInfo").style.display = "none";
+
+  if (routingControl) {
+    map.removeControl(routingControl);
+  }
+
+  alert("Trip stopped!");
+}
+
+function completeTrip() {
+  tripActive = false;
+  
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+  }
+
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("stopBtn").disabled = true;
+  document.getElementById("statusInfo").style.display = "none";
+  document.getElementById("currentStopText").textContent = "Trip Completed ✓";
+
+  notifyEngineerTripComplete();
+  alert("All stops completed!");
+}
+
+// ========== ENGINEER NOTIFICATION FUNCTIONS ==========
+
+function shareRouteWithEngineer(route) {
+  // Send route update to backend via AJAX/Fetch
+  fetch("/api/driver/share-route", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      route: route,
+      timestamp: new Date().toISOString()
+    })
+  }).catch(err => console.error("Error sharing route:", err));
+}
+
+function shareLocationWithEngineer(location) {
+  // Send location update to backend (can be batched to reduce requests)
+  fetch("/api/driver/update-location", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      lat: location[0],
+      lng: location[1],
+      stopNumber: currentStopIndex + 1,
+      timestamp: new Date().toISOString()
+    })
+  }).catch(err => console.error("Error updating location:", err));
+}
+
+function notifyEngineerTripComplete() {
+  fetch("/api/driver/trip-complete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      timestamp: new Date().toISOString(),
+      completedStops: waypoints.length
+    })
+  }).catch(err => console.error("Error notifying completion:", err));
+}
+</script>
+
+</body>
+</html>

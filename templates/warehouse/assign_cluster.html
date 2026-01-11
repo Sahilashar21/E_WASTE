@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-8 fade-in-up">
+  <h1 class="text-3xl font-bold text-[#005461]">Assign Fleet & Doctor</h1>
+  <p class="text-gray-500 mt-1">Optimize logistics by assigning the right team.</p>
+</div>
+
+<div class="glass p-8 rounded-2xl shadow-lg border border-white/50 fade-in-up" style="animation-delay: 100ms;">
+  <form method="post" action="{{ url_for('warehouse.assign_cluster') }}">
+    <input type="hidden" name="cluster_id" value="{{ cluster._id }}">
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div>
+        <label class="block text-sm font-bold text-[#005461] mb-2">Engineer</label>
+        {% if recommended_engineers %}
+        <div class="text-xs text-gray-500 mb-2 bg-blue-50 p-2 rounded border border-blue-100">
+          <span class="font-bold text-blue-600">Recommended:</span>
+          {% for re in recommended_engineers %}
+            <span class="inline-block mr-1">{{ re.name }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <select name="engineer_id" class="w-full p-3 rounded-xl border border-gray-200 bg-white/80 focus:ring-2 focus:ring-[#3BC1A8] focus:border-transparent transition-all shadow-sm">
+          <option value="">-- Select Engineer --</option>
+          {% for e in engineers %}
+            <option value="{{ e._id }}" {% if recommended_engineer_id and recommended_engineer_id == e._id|string %}selected{% endif %}>{{ e.name }} {% if not e.available_tomorrow %}(unavailable){% endif %}{% if e.on_route %} (on route){% endif %}{% if e.active_count is not none %} - {{ e.active_count }} active{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-[#005461] mb-2">Driver</label>
+        {% if recommended_drivers %}
+        <div class="text-xs text-gray-500 mb-2 bg-green-50 p-2 rounded border border-green-100">
+          <span class="font-bold text-green-600">Recommended:</span>
+          {% for rd in recommended_drivers %}
+            <span class="inline-block mr-1">{{ rd.name }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <select name="driver_id" class="w-full p-3 rounded-xl border border-gray-200 bg-white/80 focus:ring-2 focus:ring-[#3BC1A8] focus:border-transparent transition-all shadow-sm">
+          <option value="">-- Select Driver --</option>
+          {% for d in drivers %}
+            <option value="{{ d._id }}" {% if recommended_driver_id and recommended_driver_id == d._id|string %}selected{% endif %}>{{ d.name }}{% if d.active_count is not none %} - {{ d.active_count }} active{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-[#005461] mb-2">Doctor (Optional)</label>
+        <select name="doctor_id" class="w-full p-3 rounded-xl border border-gray-200 bg-white/80 focus:ring-2 focus:ring-[#3BC1A8] focus:border-transparent transition-all shadow-sm">
+          <option value="">-- Select Doctor --</option>
+          {% for doc in doctors %}
+            <option value="{{ doc._id }}">{{ doc.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+      <div>
+        <label class="block text-sm font-bold text-[#005461] mb-2">Estimated Duration (mins)</label>
+        <input name="estimated_duration_minutes" type="number" class="w-full p-3 rounded-xl border border-gray-200 bg-white/80 focus:ring-2 focus:ring-[#3BC1A8] transition-all shadow-sm" value="{{ cluster.estimated_duration_minutes or 60 }}">
+      </div>
+      <div>
+        <label class="block text-sm font-bold text-[#005461] mb-2">Route Distance (km)</label>
+        <input name="route_distance_km" type="number" step="0.1" class="w-full p-3 rounded-xl border border-gray-200 bg-white/80 focus:ring-2 focus:ring-[#3BC1A8] transition-all shadow-sm" value="{{ cluster.route_distance_km or 5.0 }}">
+      </div>
+    </div>
+
+    <div class="mt-8 flex gap-4">
+      <button type="submit" class="bg-gradient-to-r from-[#005461] to-[#00798c] text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all">
+        Confirm Assignment
+      </button>
+      <a href="{{ url_for('warehouse.dashboard') }}" class="bg-white text-gray-600 border border-gray-300 px-6 py-3 rounded-xl font-bold hover:bg-gray-50 transition-all">
+        Cancel
+      </a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

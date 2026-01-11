@@ -1,7 +1,276 @@
 {% extends 'base.html' %}
+
 {% block content %}
-<div class="max-w-xl mx-auto bg-white rounded-lg shadow-lg p-8 mt-8">
-    <h2 class="text-2xl font-bold mb-4 text-center">Engineer Dashboard</h2>
-    <p class="text-center text-gray-700">Welcome, Engineer! This is your dashboard.</p>
+<div class="mb-8 flex items-center justify-between fade-in-up">
+  <div>
+    <h1 class="text-4xl font-bold text-[#005461]">Engineer Dashboard</h1>
+    <p class="text-gray-500 font-medium mt-1">Manage your route and inspections</p>
+  </div>
+  <a href="{{ url_for('engineer.availability_settings') }}" class="glass bg-white/50 text-[#005461] border border-[#005461]/20 px-6 py-3 rounded-xl font-bold hover:bg-[#005461] hover:text-white transition-all shadow-sm">
+    ⚙️ Availability Settings
+  </a>
 </div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in-up" style="animation-delay: 100ms;">
+    
+    <!-- Active Jobs / Routes Section -->
+    <div>
+        <h2 class="text-2xl font-bold text-[#005461] mb-4 flex items-center gap-2">🚛 Assigned Routes</h2>
+        {% if my_jobs %}
+            <div class="space-y-6">
+                {% for job in my_jobs %}
+                    {% set c = job.cluster %}
+                    <div class="glass p-6 rounded-2xl shadow-sm border border-white/50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-lg font-bold">Route: {{ c.destination or 'Local Route' }} — {{ c.user_count or (c.users|length) }} stops</h3>
+                                <p class="text-sm text-gray-500">Scheduled: {{ c.scheduled_for|default('TBD') }} • ETA: {{ c.estimated_duration_minutes or '—' }} mins • Distance: {{ c.route_distance_km or '—' }} km</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm">Driver: {{ job.driver.name if job.driver else 'Unassigned' }}</p>
+                                <p class="text-sm">Doctor: {{ job.doctor.name if job.doctor else 'Unassigned' }}</p>
+                                <div class="mt-2 flex gap-2 justify-end">
+                                    {% if c.status == 'assigned' %}
+                                        <button onclick="readyOutForDelivery('{{ c._id }}')" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-xs">Ready for Delivery</button>
+                                    {% endif %}
+<!-- templates/driver/route.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Driver Multi-Stop Navigation</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Routing -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    #map { height: 100vh; width: 100vw; }
+    
+    #startBtn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      /* Glassmorphism Style */
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      color: #005461;
+      padding: 12px 24px;
+      border-radius: 16px;
+      font-weight: 800;
+      font-size: 16px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    #startBtn:hover {
+      background: rgba(255, 255, 255, 0.85);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      color: #3BC1A8;
+    }
+
+    /* Custom Leaflet Routing Container Glass Style */
+    .leaflet-routing-container {
+      background: rgba(255, 255, 255, 0.8) !important;
+      backdrop-filter: blur(10px) !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(255, 255, 255, 0.5) !important;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
+    }
+  </style>
+</head>
+
+<body>
+
+<button id="startBtn" onclick="startTrip()">
+  <span>🚀</span> Start Navigation
+</button>
+<div id="map"></div>
+
+<!-- WAYPOINT DATA FROM BACKEND -->
+<script type="application/json" id="route-data">
+{{ waypoints | tojson }}
+</script>
+
+<script>
+let map = L.map("map").setView([19.076, 72.877], 12);
+let routingControl = null;
+let driverMarker = null;
+let watchId = null;
+
+// Parse waypoints safely
+let waypoints = [];
+try {
+  waypoints = JSON.parse(document.getElementById("route-data").textContent);
+} catch (e) {
+  console.error("Error parsing waypoints", e);
+}
+
+// Map tiles
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+function startTrip() {
+  if (!navigator.geolocation) {
+    alert("GPS not supported");
+    return;
+  }
+
+  const btn = document.getElementById('startBtn');
+  btn.innerHTML = '<span>⏳</span> Locating...';
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      btn.innerHTML = '<span>📍</span> Navigation Active';
+      const startLatLng = [pos.coords.latitude, pos.coords.longitude];
+
+      // Center map on driver
+      map.setView(startLatLng, 15);
+
+      // Driver marker
+      if (!driverMarker) {
+        driverMarker = L.marker(startLatLng, {
+            icon: L.icon({
+                iconUrl: 'https://cdn-icons-png.flaticon.com/512/3097/3097136.png', // Car icon
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            })
+        }).addTo(map);
+      } else {
+        driverMarker.setLatLng(startLatLng);
+      }
+
+      // REMOVE OLD ROUTE IF EXISTS
+      if (routingControl) {
+        map.removeControl(routingControl);
+      }
+
+      // BUILD ROUTE (START → MULTIPLE STOPS)
+      const routePoints = [
+        L.latLng(startLatLng[0], startLatLng[1]),
+        ...waypoints.map(wp => L.latLng(wp.lat, wp.lng))
+      ];
+
+      routingControl = L.Routing.control({
+        waypoints: routePoints,
+        optimizeWaypoints: true,   // ✅ shortest route (TSP)
+        routeWhileDragging: false,
+        addWaypoints: false,
+        show: true,
+        lineOptions: {
+            styles: [{color: '#3BC1A8', opacity: 0.8, weight: 6}]
+        },
+        createMarker: function(i, wp, nWps) {
+            if (i === 0) return null; // No marker for start (driver is there)
+            // Use index i as the stop number (1-based)
+            return L.marker(wp.latLng).bindPopup("Stop " + i);
+        }
+      }).addTo(map);
+
+      // REAL-TIME DRIVER TRACKING
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          const newPos = [pos.coords.latitude, pos.coords.longitude];
+          if (driverMarker) driverMarker.setLatLng(newPos);
+        },
+        err => console.error("GPS error: " + err.message),
+        { enableHighAccuracy: true }
+      );
+    },
+    err => {
+        alert("Location permission denied");
+        btn.innerHTML = '<span>🚀</span> Start Navigation';
+    }
+  );
+}
+</script>
+
+</body>
+</html>
+                                    <a href="/engineer/route/{{ c._id }}" target="_blank" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs flex items-center gap-1"><span>🗺️</span> View Route</a>
+                                    <a href="/engineer/complete-cluster/{{ c._id }}" class="inline-block bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-xs">Mark Completed</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-1 gap-3">
+                            {% for p in job.pickups %}
+                                <div class="p-3 rounded-md bg-white/5 flex items-center justify-between">
+                                    <div>
+                                        <div class="font-bold">{{ p.user_name or 'User' }} — {{ p.ewaste_type }}</div>
+                                        <div class="text-sm text-gray-400">{{ p.address }} • {{ p.area }}</div>
+                                        <div class="text-sm text-gray-400">Weight: {{ p.approx_weight or p.ewaste_weight }} g • Items: {{ p['items']|length if p['items'] else 0 }}</div>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        {% if p['items'] and p['items'][0].get('image') and p['items'][0]['image']|length > 20 %}
+                                            <img src="{{ p['items'][0]['image'] }}" alt="item" class="h-12 w-12 object-cover rounded-md">
+                                        {% else %}
+                                            <div class="h-12 w-12 bg-gray-200 rounded-md flex items-center justify-center text-gray-500">🖼️</div>
+                                        {% endif %}
+                                        <a href="/engineer/inspect/{{ p._id }}" class="bg-[#3BC1A8] text-white px-3 py-1 rounded-md text-sm">Inspect</a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="glass p-10 rounded-2xl text-center border-2 border-dashed border-gray-300">
+                <div class="text-4xl mb-3 opacity-30">📭</div>
+                <p class="text-gray-500">No assigned routes yet.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Route Info -->
+    <div>
+        <h2 class="text-2xl font-bold text-[#005461] mb-4 flex items-center gap-2">📍 Route Map</h2>
+        <div class="glass p-6 rounded-2xl shadow-sm border border-white/50 h-80 flex flex-col items-center justify-center text-gray-500 relative overflow-hidden group">
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-50/30 to-purple-50/30"></div>
+            <span class="text-6xl mb-4 z-10 group-hover:scale-110 transition-transform duration-300">🗺️</span>
+            <p class="z-10 font-medium">Select a route from the list to view navigation</p>
+            <p class="z-10 text-xs mt-2 opacity-70">Optimized multi-stop routing enabled</p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function readyOutForDelivery(clusterId) {
+        if (confirm('Mark all inspections complete and ready for delivery?')) {
+            fetch(`/warehouse/update-cluster-status/${clusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status: 'out_for_delivery' })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    alert('Cluster marked as ready for delivery!');
+                    location.reload();
+                }
+            })
+            .catch(e => console.error('Error:', e));
+        }
+    }
+</script>
+
 {% endblock %}

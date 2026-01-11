@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<div class="container mx-auto px-4 py-8 h-full overflow-y-auto fade-in-up">
+    <h1 class="text-4xl font-bold text-[#005461] mb-8">♻️ Recycler Dashboard</h1>
+
+    <!-- Incoming Inventory -->
+    <div class="mb-12 fade-in-up" style="animation-delay: 100ms;">
+        <h2 class="text-xl font-bold text-[#005461] mb-4">📥 Incoming Inventory (Collected)</h2>
+        {% if collected %}
+        <div class="glass rounded-2xl shadow-lg overflow-x-auto border border-white/50">
+            <table class="min-w-full text-sm text-left">
+                <thead class="bg-[#005461]/5 text-[#005461] uppercase font-bold tracking-wider">
+                    <tr>
+                        <th class="px-6 py-4">E-Waste Type</th>
+                        <th class="px-6 py-4">Weight</th>
+                        <th class="px-6 py-4">Origin Area</th>
+                        <th class="px-6 py-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100/50">
+                    {% for item in collected %}
+                    <tr class="hover:bg-white/40 transition-colors">
+                        <td class="px-6 py-4 font-bold text-gray-700">{{ item.ewaste_type }}</td>
+                        <td class="px-6 py-4 font-mono text-[#005461]">{{ item.approx_weight }} g</td>
+                        <td class="px-6 py-4 text-gray-600">{{ item.area }}</td>
+                        <td class="px-6 py-4">
+                            <button onclick="initiatePayment('{{ item._id }}')" class="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wide hover:shadow-lg transition-all">
+                                💳 Pay & Recycle
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="glass p-12 rounded-2xl text-center border-2 border-dashed border-gray-300">
+            <div class="text-4xl mb-3 opacity-30">📥</div>
+            <p class="text-gray-500">No collected items pending for recycling.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Processed History -->
+    <div class="fade-in-up" style="animation-delay: 200ms;">
+        <h2 class="text-xl font-bold text-[#005461] mb-4">✅ Processed History</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% for item in recycled %}
+            <div class="glass p-5 rounded-xl shadow-sm border border-white/50 hover:shadow-md transition-all">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-bold text-[#005461]">{{ item.ewaste_type }}</p>
+                        <p class="text-xs text-gray-500">{{ item.area }}</p>
+                    </div>
+                    <span class="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide">RECYCLED</span>
+                </div>
+                <p class="mt-3 text-lg font-bold text-gray-700">{{ item.approx_weight }} <span class="text-sm font-normal text-gray-500">g</span></p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+async function initiatePayment(pickupId) {
+    try {
+        // 1. Create Order
+        const response = await fetch(`/payment/initiate/${pickupId}`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+        
+        if (data.key_id === 'rzp_test_123456789') {
+            alert("Error: Invalid Razorpay API Key. Please check your .env file configuration.");
+            return;
+        }
+
+        // 2. Open Razorpay
+        const options = {
+            "key": data.key_id,
+            "amount": data.amount,
+            "currency": "INR",
+            "name": "E-Waste Recycling",
+            "description": "Payment for collected e-waste",
+            "order_id": data.order_id,
+            "handler": async function (response){
+                // 3. Verify Payment
+                const verifyRes = await fetch('/payment/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        razorpay_order_id: response.razorpay_order_id,
+                        razorpay_signature: response.razorpay_signature,
+                        pickup_id: data.pickup_id
+                    })
+                });
+                const verifyData = await verifyRes.json();
+                if (verifyData.success) {
+                    alert("Payment Successful! Funds distributed and invoices generated.");
+                    location.reload();
+                } else {
+                    alert("Payment Verification Failed");
+                }
+            },
+            "prefill": { "name": data.user_name, "email": data.email },
+            "theme": { "color": "#005461" }
+        };
+        const rzp1 = new Razorpay(options);
+        rzp1.open();
+    } catch (e) {
+        console.error(e);
+        alert("Error initiating payment");
+    }
+}
+</script>
+{% endblock %}

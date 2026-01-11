@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto fade-in-up">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-3xl font-bold text-[#005461]">Item Inspection & Valuation</h1>
+    <a href="{{ url_for('engineer.dashboard') }}" class="glass bg-white/50 text-gray-600 px-4 py-2 rounded-xl font-semibold hover:bg-white hover:text-[#005461] transition-all border border-white/50">← Back</a>
+  </div>
+
+  <!-- Pickup Details -->
+  <div class="glass p-6 rounded-2xl mb-6 border border-white/50 fade-in-up" style="animation-delay: 100ms;">
+    <h2 class="text-xl font-bold text-[#005461] mb-4">Pickup Details</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div><strong>User:</strong> {{ pickup.user_name or 'User' }}</div>
+      <div><strong>Address:</strong> {{ pickup.address }}, {{ pickup.area }}</div>
+      <div><strong>E-Waste Type:</strong> {{ pickup.ewaste_type }}</div>
+      <div><strong>Items Count:</strong> {{ pickup['items']|length if pickup['items'] else 0 }}</div>
+      <div><strong>Approx Weight:</strong> {{ pickup.approx_weight }} g</div>
+      <div><strong>Status:</strong> 
+        <span class="px-2 py-1 rounded text-sm font-bold
+          {% if pickup.inspection_status == 'accepted' %}bg-green-100 text-green-800
+          {% elif pickup.inspection_status == 'rejected' %}bg-red-100 text-red-800
+          {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+          {{ pickup.inspection_status or 'Pending Inspection' }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items List -->
+  <div class="glass p-6 rounded-2xl mb-6 border border-white/50 fade-in-up" style="animation-delay: 200ms;">
+    <h2 class="text-xl font-bold text-[#005461] mb-4">Items in Pickup</h2>
+    <div class="space-y-3">
+      {% for item in pickup['items'] %}
+      <div class="p-3 bg-white/5 rounded-lg">
+        <div class="flex justify-between">
+          <div>
+            <strong>{{ item.type }}</strong> — {{ item.weight }}g
+            {% if item.description %}<div class="text-sm text-gray-500">{{ item.description }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Inspection Form -->
+  {% if pickup.inspection_status != 'accepted' and pickup.inspection_status != 'rejected' %}
+  <div class="glass p-6 rounded-2xl mb-6 border border-white/50 fade-in-up" style="animation-delay: 300ms;">
+    <h2 class="text-xl font-bold text-[#005461] mb-4">Inspection Form</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div>
+        <label class="block text-sm font-bold mb-2">Condition</label>
+        <select id="condition" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+          <option value="working">Working</option>
+          <option value="repairable" selected>Repairable</option>
+          <option value="scrap">Scrap</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold mb-2">Age (years)</label>
+        <input type="number" id="age" value="3" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold mb-2">Category</label>
+        <select id="category" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+          <option value="Laptop">Laptop</option>
+          <option value="Desktop PC" selected>Desktop PC</option>
+          <option value="Mobile Devices">Mobile Devices</option>
+          <option value="Printer">Printer</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold mb-2">Weight (grams)</label>
+        <input type="number" id="weight" step="0.1" value="{{ pickup.approx_weight }}" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+      </div>
+    </div>
+
+    <div class="p-4 bg-blue-50 border-l-4 border-blue-500 rounded mb-6">
+      <strong>Estimated Price:</strong> <span id="priceDisplay" class="text-2xl text-blue-600 font-bold">₹0</span>
+    </div>
+
+    <!-- Accept / Reject Buttons -->
+    <div class="flex gap-4">
+      <button onclick="acceptInspection()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg">
+        ✓ Accept & Proceed to Collection
+      </button>
+      <button onclick="showRejectForm()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-lg">
+        ✗ Reject Item
+      </button>
+    </div>
+  </div>
+
+  <!-- Reject Reason Form -->
+  <div id="rejectForm" class="hidden glass p-6 rounded-2xl mb-6 border border-white/50">
+    <h3 class="text-lg font-bold mb-4">Rejection Reason</h3>
+    <textarea id="rejectReason" placeholder="Explain why item is rejected..." class="w-full px-3 py-2 border border-gray-300 rounded-lg" rows="3"></textarea>
+    <div class="flex gap-3 mt-4">
+      <button onclick="submitReject()" class="bg-red-500 hover:bg-red-600 text-white font-bold px-6 py-2 rounded-lg">
+        Confirm Reject
+      </button>
+      <button onclick="hideRejectForm()" class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded-lg">
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  {% elif pickup.inspection_status == 'accepted' %}
+  <!-- Collection Form: Upload Final Images & Weight -->
+  <div class="glass p-6 rounded-2xl mb-6 border border-white/50">
+    <h2 class="text-xl font-bold text-[#005461] mb-4">Collection Complete - Upload Final Details</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div>
+        <label class="block text-sm font-bold mb-2">Final Weight (grams)</label>
+        <input type="number" id="finalWeight" step="0.1" value="{{ pickup.final_weight or pickup.approx_weight }}" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold mb-2">Quality Assessment</label>
+        <select id="finalQuality" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+          <option value="excellent">Excellent</option>
+          <option value="good" selected>Good</option>
+          <option value="fair">Fair</option>
+          <option value="poor">Poor</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-bold mb-2">Upload Completion Images</label>
+      <input type="file" id="finalImages" multiple accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+      <p class="text-xs text-gray-500 mt-2">Upload photos of collected items before delivery to warehouse</p>
+    </div>
+
+    <button onclick="markCollected()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg mt-6">
+      ✓ Mark as Collected & Delivered
+    </button>
+  </div>
+
+  {% elif pickup.inspection_status == 'rejected' %}
+  <!-- Rejection Status -->
+  <div class="glass p-6 rounded-2xl border border-red-200 bg-red-50">
+    <h2 class="text-xl font-bold text-red-700 mb-2">❌ Item Rejected</h2>
+    <p class="text-red-600"><strong>Reason:</strong> {{ pickup.rejection_reason }}</p>
+    <p class="text-red-500 text-sm mt-2">User has been notified of rejection.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+const PICKUP_ID = "{{ pickup._id }}";
+
+// Calculate price in real-time
+document.getElementById('condition').addEventListener('change', calculatePrice);
+document.getElementById('age').addEventListener('change', calculatePrice);
+document.getElementById('category').addEventListener('change', calculatePrice);
+document.getElementById('weight').addEventListener('input', calculatePrice);
+
+async function calculatePrice() {
+  const category = document.getElementById('category').value;
+  const weight = parseFloat(document.getElementById('weight').value) || 0;
+  const condition = document.getElementById('condition').value;
+  const age = parseInt(document.getElementById('age').value) || 0;
+
+  try {
+    const resp = await fetch('/engineer/calculate-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, weight, condition, age_years: age })
+    });
+    const data = await resp.json();
+    document.getElementById('priceDisplay').innerText = '₹' + data.estimated_value;
+    window.currentPrice = data.estimated_value;
+  } catch (err) {
+    console.error('Price calculation error:', err);
+  }
+}
+
+async function acceptInspection() {
+  const price = window.currentPrice || 0;
+  try {
+    const resp = await fetch(`/engineer/inspection/${PICKUP_ID}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price })
+    });
+    if (resp.ok) {
+      alert('Inspection accepted! Now proceed to collect the item.');
+      location.reload();
+    }
+  } catch (err) {
+    alert('Error accepting inspection');
+  }
+}
+
+function showRejectForm() {
+  document.getElementById('rejectForm').classList.remove('hidden');
+}
+
+function hideRejectForm() {
+  document.getElementById('rejectForm').classList.add('hidden');
+}
+
+async function submitReject() {
+  const reason = document.getElementById('rejectReason').value || 'Item does not meet standards';
+  try {
+    const resp = await fetch(`/engineer/inspection/${PICKUP_ID}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    if (resp.ok) {
+      alert('Rejection submitted. User has been notified.');
+      location.reload();
+    }
+  } catch (err) {
+    alert('Error submitting rejection');
+  }
+}
+
+async function markCollected() {
+  const weight = parseFloat(document.getElementById('finalWeight').value) || 0;
+  const quality = document.getElementById('finalQuality').value;
+  
+  try {
+    const resp = await fetch(`/engineer/inspection/${PICKUP_ID}/mark-collected`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weight, quality })
+    });
+    if (resp.ok) {
+      alert('Item marked as collected and delivered to warehouse!');
+      location.reload();
+    }
+  } catch (err) {
+    alert('Error marking as collected');
+  }
+}
+
+// Initialize price on load
+calculatePrice();
+</script>
+
+{% endblock %}
