@@ -131,12 +131,13 @@
 
 
 
-from flask import Flask, session, redirect, render_template, request, url_for
+
+from flask import Flask, session, redirect, render_template, url_for
 from dotenv import load_dotenv
 import os
 from datetime import datetime
 
-# Load environment variables FIRST
+# Load env early
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # APScheduler (optional)
@@ -147,27 +148,14 @@ except Exception:
     BackgroundScheduler = None
     SCHEDULER_AVAILABLE = False
 
-# Mongo setup
+# Mongo (DO NOT import blueprints yet)
 from mongo import mongo
-
-# Blueprints
-from routes.user_routes import user_bp
-from routes.warehouse_routes import warehouse_bp
-from routes.auth_routes import auth_bp
-from routes.engineer_routes import engineer_bp
-from routes.all_users_routes import all_users_bp
-from routes.recycler_routes import recycler_bp
-from routes.status_routes import status_bp
-from routes.driver_routes import driver_bp
-from routes.notification_routes import notification_bp
-from routes.payment_routes import payment_bp
 
 
 def create_app():
     app = Flask(__name__)
 
     # ================= CONFIG =================
-
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev_secret")
 
     app.config["MONGO_URI"] = os.getenv(
@@ -176,13 +164,15 @@ def create_app():
     )
 
     # ================= INIT MONGO =================
-
     mongo.init_app(app)
 
-    # ================= SCHEDULED TASK =================
+    # ================= HEALTH CHECK (DEBUG) =================
+    @app.route("/__health")
+    def health():
+        return str(mongo.db), 200
 
+    # ================= SCHEDULED TASK =================
     def reset_engineer_availability():
-        """Reset all engineer availability to True at midnight"""
         try:
             mongo.db.users.update_many(
                 {"role": "engineer"},
@@ -190,7 +180,7 @@ def create_app():
             )
             print(f"[{datetime.now()}] Engineer availability reset")
         except Exception as e:
-            print(f"Error resetting engineer availability: {e}")
+            print("Scheduler error:", e)
 
     if SCHEDULER_AVAILABLE and BackgroundScheduler is not None:
         try:
@@ -208,12 +198,21 @@ def create_app():
             )
             scheduler.start()
         except Exception as e:
-            print(f"Failed to start scheduler: {e}")
-    else:
-        print("APScheduler not installed; scheduled tasks disabled.")
+            print("Scheduler failed:", e)
 
-    # ================= BLUEPRINTS =================
+    # ================= IMPORT BLUEPRINTS (🔥 FIX) =================
+    from routes.user_routes import user_bp
+    from routes.warehouse_routes import warehouse_bp
+    from routes.auth_routes import auth_bp
+    from routes.engineer_routes import engineer_bp
+    from routes.driver_routes import driver_bp
+    from routes.notification_routes import notification_bp
+    from routes.all_users_routes import all_users_bp
+    from routes.recycler_routes import recycler_bp
+    from routes.status_routes import status_bp
+    from routes.payment_routes import payment_bp
 
+    # ================= REGISTER BLUEPRINTS =================
     app.register_blueprint(user_bp)
     app.register_blueprint(warehouse_bp, url_prefix="/warehouse")
     app.register_blueprint(auth_bp)
@@ -226,7 +225,6 @@ def create_app():
     app.register_blueprint(payment_bp)
 
     # ================= ROUTES =================
-
     @app.route('/')
     def index():
         if 'user_id' in session:
@@ -245,7 +243,6 @@ def create_app():
 
 
 # ================= ENTRY POINT =================
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, port=5000)
