@@ -8,5 +8,6 @@ _client = None
 def get_db():
     global _client
     if _client is None:
-        _client = MongoClient(MONGO_URI)
+        _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)  # ⬅ IMPORTANT
+
     return _client["ewaste_db"]
