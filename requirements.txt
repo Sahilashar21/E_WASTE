@@ -4,3 +4,4 @@ python-dotenv
 pymongo
 werkzeug
 APScheduler
+gunicorn
