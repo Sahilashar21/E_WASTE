@@ -1,15 +1,12 @@
-# MongoDB connection helper for other modules
 from pymongo import MongoClient
-from flask_pymongo import PyMongo
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# HARDCODED MongoDB URI
+MONGO_URI = "mongodb+srv://darpanmeher1346_db_user:E8kreTF6Z8G5mFbn@cluster0.mhkyevr.mongodb.net/?retryWrites=true&w=majority"
 
-mongo = PyMongo()
+_client = None
 
 def get_db():
-    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/ewaste_db')
-    client = MongoClient(mongo_uri)
-    db = client['ewaste_db']
-    return db
+    global _client
+    if _client is None:
+        _client = MongoClient(MONGO_URI)
+    return _client["ewaste_db"]
