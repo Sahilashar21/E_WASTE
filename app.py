@@ -1,11 +1,12 @@
 from flask import Flask, session, redirect, render_template, request, url_for
 from dotenv import load_dotenv
 import os
+from datetime import datetime
 
-# Load environment variables FIRST before importing routes that use them
+# Load environment variables FIRST
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
-from datetime import datetime
+# APScheduler (optional)
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     SCHEDULER_AVAILABLE = True
@@ -13,7 +14,7 @@ except Exception:
     BackgroundScheduler = None
     SCHEDULER_AVAILABLE = False
 
-# Mongo setup
+# Mongo setup (your existing hybrid mongo.py)
 from mongo import mongo
 
 # Blueprints
@@ -28,40 +29,60 @@ from routes.driver_routes import driver_bp
 from routes.notification_routes import notification_bp
 from routes.payment_routes import payment_bp
 
-# Scheduled task: Reset engineer availability at midnight (12 AM)
-def reset_engineer_availability():
-    """Reset all engineer availability to True at midnight"""
-    try:
-        mongo.db.users.update_many(
-            {"role": "engineer"},
-            {"$set": {"available_tomorrow": True}}
-        )
-        print(f"[{datetime.now()}] Engineer availability reset for new day")
-    except Exception as e:
-        print(f"Error resetting engineer availability: {e}")
 
 def create_app():
     app = Flask(__name__)
 
-    # Configuration
-    app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb+srv://darpanmeher1346_db_user:E8kreTF6Z8G5mFbn@cluster0.mhkyevr.mongodb.net/?retryWrites=true&w=majority")
+    # ================= CONFIG =================
+
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev_secret")
 
-    # Initialize MongoDB
+    # 🔥 CRITICAL FIX: DB NAME MUST BE IN URI
+    app.config["MONGO_URI"] = os.getenv(
+        "MONGO_URI",
+        "mongodb+srv://darpanmeher1346_db_user:E8kreTF6Z8G5mFbn@cluster0.mhkyevr.mongodb.net/ewaste_db?retryWrites=true&w=majority"
+    )
+
+    # ================= INIT MONGO =================
+
     mongo.init_app(app)
 
-    # Initialize APScheduler for background tasks (optional)
+    # ================= SCHEDULED TASK =================
+
+    def reset_engineer_availability():
+        """Reset all engineer availability to True at midnight"""
+        try:
+            mongo.db.users.update_many(
+                {"role": "engineer"},
+                {"$set": {"available_tomorrow": True}}
+            )
+            print(f"[{datetime.now()}] Engineer availability reset")
+        except Exception as e:
+            print(f"Error resetting engineer availability: {e}")
+
     if SCHEDULER_AVAILABLE and BackgroundScheduler is not None:
         try:
             scheduler = BackgroundScheduler()
-            scheduler.add_job(func=reset_engineer_availability, trigger="cron", hour=0, minute=0)
+
+            # 🔥 FIX: Ensure Flask app context exists
+            def scheduled_reset():
+                with app.app_context():
+                    reset_engineer_availability()
+
+            scheduler.add_job(
+                func=scheduled_reset,
+                trigger="cron",
+                hour=0,
+                minute=0
+            )
             scheduler.start()
         except Exception as e:
             print(f"Failed to start scheduler: {e}")
     else:
-        print("APScheduler not installed; skipping scheduled tasks (availability reset disabled).")
+        print("APScheduler not installed; scheduled tasks disabled.")
 
-    # Register Blueprints
+    # ================= BLUEPRINTS =================
+
     app.register_blueprint(user_bp)
     app.register_blueprint(warehouse_bp, url_prefix="/warehouse")
     app.register_blueprint(auth_bp)
@@ -73,24 +94,25 @@ def create_app():
     app.register_blueprint(status_bp)
     app.register_blueprint(payment_bp)
 
-    # Landing Route
+    # ================= ROUTES =================
+
     @app.route('/')
     def index():
         if 'user_id' in session:
-            if session.get('role') == 'warehouse':
+            role = session.get('role')
+            if role == 'warehouse':
                 return redirect(url_for('warehouse.dashboard'))
-            elif session.get('role') == 'engineer':
+            elif role == 'engineer':
                 return redirect(url_for('engineer.dashboard'))
-            elif session.get('role') == 'recycler':
+            elif role == 'recycler':
                 return redirect(url_for('recycler.dashboard'))
-            elif session.get('role') == 'user':
+            elif role == 'user':
                 return redirect(url_for('user.dashboard'))
         return render_template('index.html')
 
-    # Quick demo login for homepage "Try Demo" button
+    # Demo login
     @app.route('/dev/login')
     def dev_login():
-        # Seed2 uses 'test_user_1' as a sample user id for demo pickup requests
         session['role'] = 'user'
         session['user_id'] = 'test_user_1'
         session['email'] = 'demo@example.com'
@@ -98,6 +120,9 @@ def create_app():
         return redirect(url_for('user.dashboard'))
 
     return app
+
+
+# ================= ENTRY POINT =================
 
 if __name__ == '__main__':
     app = create_app()
